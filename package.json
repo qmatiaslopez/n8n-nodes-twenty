@@ -1,19 +1,31 @@
 {
-  "name": "n8n-nodes-twenty",
-  "version": "0.0.5",
-  "description": "n8n node to call Twenty CRM's API",
+  "name": "n8n-nodes-twenty-fork",
+  "version": "0.1.0",
+  "description": "n8n node for Twenty CRM v1.4.0+ API (Community fork with v1.4.0 compatibility)",
   "keywords": [
-    "n8n-community-node-package"
+    "n8n-community-node-package",
+    "twenty-fork",
+    "twenty-v1.4.0",
+    "community-fork",
+    "twenty-crm",
+    "crm"
   ],
   "license": "MIT",
-  "homepage": "",
+  "homepage": "https://github.com/qmatiaslopez/n8n-nodes-twenty",
   "author": {
-    "name": "S Hodgson",
-    "email": "steven@hodgolabs.com"
+    "name": "Matias Lopez",
+    "url": "https://github.com/qmatiaslopez"
   },
+  "contributors": [
+    {
+      "name": "S Hodgson",
+      "email": "steven@hodgolabs.com",
+      "url": "https://github.com/shodgson/n8n-nodes-twenty"
+    }
+  ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/shodgson/n8n-nodes-twenty"
+    "url": "https://github.com/qmatiaslopez/n8n-nodes-twenty"
   },
   "engines": {
     "node": ">=18.10",

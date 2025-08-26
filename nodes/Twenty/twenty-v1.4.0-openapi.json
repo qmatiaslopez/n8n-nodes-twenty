@@ -2,7 +2,7 @@
 	"openapi": "3.1.1",
 	"info": {
 		"title": "Twenty Api",
-		"description": "Use this page to explore and call the **REST API**.\n\n## Authentication\n\nSend a Bearer token with each request:\n\n```http\nAuthorization: Bearer <token>\n```\n\nExample cURL:\n\n```bash\ncurl -H 'Authorization: Bearer <token>' <server>/rest/core/companies\n```\n\nTokens can be generated in Settings → Playground and are workspace-scoped.\n\n## Filters\n\nUse the `filter` query parameter to narrow results.\n\n- Format: `field[COMPARATOR]:value`\n- Multiple conditions: `field1[eq]:1,field2[gte]:10` (root conjunction is AND)\n- Composite fields: `field.subField[COMPARATOR]:value`\n- Common comparators: `eq`, `neq`, `in`, `containsAny`, `is`, `gt`, `gte`, `lt`, `lte`, `startsWith`, `like`, `ilike`\n\nExamples:\n\n```text\nfilter=status[eq]:\"open\"\nfilter=createdAt[gte]:\"2024-01-01\"\nfilter=owner.name[ilike]:\"%smith%\"\nfilter=id[in]:[\"id-1\",\"id-2\"]\nfilter=deletedAt[is]:NULL\nfilter=isActive[eq]:true\n```\n\nAdvanced (optional): `and(...)`, `or(...)`, `not(...)` (`not` wraps one condition)\n\n```text\nfilter=or(status[eq]:\"open\",assigneeId[is]:NULL)\n```\n\n## Pagination and ordering\n\nAll list endpoints use cursor-based pagination.\n\n- Use **limit** to cap page size (default: 60, max: 60).\n- Use **starting_after** to fetch the next page (forward).\n- Use **ending_before** to fetch the previous page (backward).\n- Responses include **pageInfo** with `hasNextPage`, `startCursor`, and `endCursor`.\n\nOrdering with `order_by`:\n- Shape: `field1,field2[DIRECTION2]`\n- Directions: AscNullsFirst, AscNullsLast, DescNullsFirst, DescNullsLast\n- Default per-field direction: AscNullsFirst",
+		"description": "This is a **Twenty REST/API** playground based on the **OpenAPI 3.1 specification**.",
 		"termsOfService": "https://github.com/twentyhq/twenty?tab=coc-ov-file#readme",
 		"contact": { "email": "felix@twenty.com" },
 		"license": {
@@ -11,16 +11,6 @@
 		},
 		"version": "v0.1"
 	},
-	"servers": [
-		{
-			"url": "/rest/core",
-			"description": "Twenty Core API"
-		},
-		{
-			"url": "/rest/metadata", 
-			"description": "Twenty Metadata API"
-		}
-	],
 	"components": {
 		"securitySchemes": {
 			"bearerAuth": {
@@ -4453,12 +4443,61 @@
 				"required": true,
 				"schema": { "type": "string", "format": "uuid" }
 			},
+			"startingAfter": {
+				"name": "starting_after",
+				"in": "query",
+				"description": "Returns objects starting after a specific cursor. You can find cursors in **startCursor** and **endCursor** in **pageInfo** in response data",
+				"required": false,
+				"schema": { "type": "string" }
+			},
+			"endingBefore": {
+				"name": "ending_before",
+				"in": "query",
+				"description": "Returns objects ending before a specific cursor. You can find cursors in **startCursor** and **endCursor** in **pageInfo** in response data",
+				"required": false,
+				"schema": { "type": "string" }
+			},
+			"filter": {
+				"name": "filter",
+				"in": "query",
+				"description": "Filters objects returned.  \n    Should have the following shape: **field_1[COMPARATOR]:value_1,field_2[COMPARATOR]:value_2...\n    To filter on composite type fields use **field.subField[COMPARATOR]:value_1\n    **\n    Available comparators are **eq**, **neq**, **in**, **containsAny**, **is**, **gt**, **gte**, **lt**, **lte**, **startsWith**, **like**, **ilike**.  \n    You can create more complex filters using conjunctions **or**, **and**, **not**.  \n    Default root conjunction is **and**.  \n    To filter **null** values use **field[is]:NULL** or **field[is]:NOT_NULL**  \n    To filter using **boolean** values use **field[eq]:true** or **field[eq]:false**",
+				"required": false,
+				"schema": { "type": "string", "default": "id[neq]:\"00000000-0000-0000-0000-000000000000\"" },
+				"examples": {
+					"simple": {
+						"value": "createdAt[gte]:\"2023-01-01\"",
+						"description": "A simple filter param"
+					},
+					"simpleNested": {
+						"value": "emails.primaryEmail[eq]:foo99@example.com",
+						"description": "A simple composite type filter param"
+					},
+					"complex": {
+						"value": "or(createdAt[gte]:\"2024-01-01\",createdAt[lte]:\"2023-01-01\",not(id[is]:NULL))",
+						"description": "A more complex filter param"
+					}
+				}
+			},
 			"depth": {
 				"name": "depth",
 				"in": "query",
 				"description": "Determines the level of nested related objects to include in the response.  \n    - 0: Returns only the primary object's information.  \n    - 1: Returns the primary object along with its directly related objects (with no additional nesting for related objects).  \n    - 2: Returns the primary object, its directly related objects, and the related objects of those related objects.",
 				"required": false,
 				"schema": { "type": "integer", "enum": [0, 1, 2], "default": 1 }
+			},
+			"orderBy": {
+				"name": "order_by",
+				"in": "query",
+				"description": "Sorts objects returned.  \n    Should have the following shape: **field_name_1,field_name_2[DIRECTION_2],...**  \n    Available directions are **AscNullsFirst**, **AscNullsLast**, **DescNullsFirst**, **DescNullsLast**.  \n    Default direction is **AscNullsFirst**",
+				"required": false,
+				"schema": { "type": "string", "default": "id" },
+				"examples": {
+					"simple": { "value": "createdAt", "summary": "A simple order_by param" },
+					"complex": {
+						"value": "id[AscNullsFirst],createdAt[DescNullsLast]",
+						"summary": "A more complex order_by param"
+					}
+				}
 			},
 			"limit": {
 				"name": "limit",
@@ -4561,19 +4600,19 @@
 				}
 			}
 		},
-		"/rest/apiKeys": {
+		"/apiKeys": {
 			"get": {
 				"tags": ["apiKeys"],
 				"summary": "Find Many apiKeys",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **apiKeys**",
 				"operationId": "findManyApiKeys",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -4644,7 +4683,7 @@
 				}
 			}
 		},
-		"/rest/batch/apiKeys": {
+		"/batch/apiKeys": {
 			"post": {
 				"tags": ["apiKeys"],
 				"summary": "Create Many apiKeys",
@@ -4685,7 +4724,7 @@
 				}
 			}
 		},
-		"/rest/apiKeys/{id}": {
+		"/apiKeys/{id}": {
 			"get": {
 				"tags": ["apiKeys"],
 				"summary": "Find One apiKey",
@@ -4788,7 +4827,7 @@
 				}
 			}
 		},
-		"/rest/apiKeys/duplicates": {
+		"/apiKeys/duplicates": {
 			"post": {
 				"tags": ["apiKeys"],
 				"summary": "Find apiKey Duplicates",
@@ -4850,19 +4889,19 @@
 				}
 			}
 		},
-		"/rest/attachments": {
+		"/attachments": {
 			"get": {
 				"tags": ["attachments"],
 				"summary": "Find Many attachments",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **attachments**",
 				"operationId": "findManyAttachments",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -4935,7 +4974,7 @@
 				}
 			}
 		},
-		"/rest/batch/attachments": {
+		"/batch/attachments": {
 			"post": {
 				"tags": ["attachments"],
 				"summary": "Create Many attachments",
@@ -4976,7 +5015,7 @@
 				}
 			}
 		},
-		"/rest/attachments/{id}": {
+		"/attachments/{id}": {
 			"get": {
 				"tags": ["attachments"],
 				"summary": "Find One attachment",
@@ -5079,7 +5118,7 @@
 				}
 			}
 		},
-		"/rest/attachments/duplicates": {
+		"/attachments/duplicates": {
 			"post": {
 				"tags": ["attachments"],
 				"summary": "Find attachment Duplicates",
@@ -5144,19 +5183,19 @@
 				}
 			}
 		},
-		"/rest/blocklists": {
+		"/blocklists": {
 			"get": {
 				"tags": ["blocklists"],
 				"summary": "Find Many blocklists",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **blocklists**",
 				"operationId": "findManyBlocklists",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -5229,7 +5268,7 @@
 				}
 			}
 		},
-		"/rest/batch/blocklists": {
+		"/batch/blocklists": {
 			"post": {
 				"tags": ["blocklists"],
 				"summary": "Create Many blocklists",
@@ -5270,7 +5309,7 @@
 				}
 			}
 		},
-		"/rest/blocklists/{id}": {
+		"/blocklists/{id}": {
 			"get": {
 				"tags": ["blocklists"],
 				"summary": "Find One blocklist",
@@ -5373,7 +5412,7 @@
 				}
 			}
 		},
-		"/rest/blocklists/duplicates": {
+		"/blocklists/duplicates": {
 			"post": {
 				"tags": ["blocklists"],
 				"summary": "Find blocklist Duplicates",
@@ -5438,19 +5477,19 @@
 				}
 			}
 		},
-		"/rest/calendarChannelEventAssociations": {
+		"/calendarChannelEventAssociations": {
 			"get": {
 				"tags": ["calendarChannelEventAssociations"],
 				"summary": "Find Many calendarChannelEventAssociations",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **calendarChannelEventAssociations**",
 				"operationId": "findManyCalendarChannelEventAssociations",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -5529,7 +5568,7 @@
 				}
 			}
 		},
-		"/rest/batch/calendarChannelEventAssociations": {
+		"/batch/calendarChannelEventAssociations": {
 			"post": {
 				"tags": ["calendarChannelEventAssociations"],
 				"summary": "Create Many calendarChannelEventAssociations",
@@ -5575,7 +5614,7 @@
 				}
 			}
 		},
-		"/rest/calendarChannelEventAssociations/{id}": {
+		"/calendarChannelEventAssociations/{id}": {
 			"get": {
 				"tags": ["calendarChannelEventAssociations"],
 				"summary": "Find One calendarChannelEventAssociation",
@@ -5684,7 +5723,7 @@
 				}
 			}
 		},
-		"/rest/calendarChannelEventAssociations/duplicates": {
+		"/calendarChannelEventAssociations/duplicates": {
 			"post": {
 				"tags": ["calendarChannelEventAssociations"],
 				"summary": "Find calendarChannelEventAssociation Duplicates",
@@ -5751,19 +5790,19 @@
 				}
 			}
 		},
-		"/rest/calendarChannels": {
+		"/calendarChannels": {
 			"get": {
 				"tags": ["calendarChannels"],
 				"summary": "Find Many calendarChannels",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **calendarChannels**",
 				"operationId": "findManyCalendarChannels",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -5838,7 +5877,7 @@
 				}
 			}
 		},
-		"/rest/batch/calendarChannels": {
+		"/batch/calendarChannels": {
 			"post": {
 				"tags": ["calendarChannels"],
 				"summary": "Create Many calendarChannels",
@@ -5882,7 +5921,7 @@
 				}
 			}
 		},
-		"/rest/calendarChannels/{id}": {
+		"/calendarChannels/{id}": {
 			"get": {
 				"tags": ["calendarChannels"],
 				"summary": "Find One calendarChannel",
@@ -5991,7 +6030,7 @@
 				}
 			}
 		},
-		"/rest/calendarChannels/duplicates": {
+		"/calendarChannels/duplicates": {
 			"post": {
 				"tags": ["calendarChannels"],
 				"summary": "Find calendarChannel Duplicates",
@@ -6056,19 +6095,19 @@
 				}
 			}
 		},
-		"/rest/calendarEventParticipants": {
+		"/calendarEventParticipants": {
 			"get": {
 				"tags": ["calendarEventParticipants"],
 				"summary": "Find Many calendarEventParticipants",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **calendarEventParticipants**",
 				"operationId": "findManyCalendarEventParticipants",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -6147,7 +6186,7 @@
 				}
 			}
 		},
-		"/rest/batch/calendarEventParticipants": {
+		"/batch/calendarEventParticipants": {
 			"post": {
 				"tags": ["calendarEventParticipants"],
 				"summary": "Create Many calendarEventParticipants",
@@ -6193,7 +6232,7 @@
 				}
 			}
 		},
-		"/rest/calendarEventParticipants/{id}": {
+		"/calendarEventParticipants/{id}": {
 			"get": {
 				"tags": ["calendarEventParticipants"],
 				"summary": "Find One calendarEventParticipant",
@@ -6302,7 +6341,7 @@
 				}
 			}
 		},
-		"/rest/calendarEventParticipants/duplicates": {
+		"/calendarEventParticipants/duplicates": {
 			"post": {
 				"tags": ["calendarEventParticipants"],
 				"summary": "Find calendarEventParticipant Duplicates",
@@ -6369,19 +6408,19 @@
 				}
 			}
 		},
-		"/rest/calendarEvents": {
+		"/calendarEvents": {
 			"get": {
 				"tags": ["calendarEvents"],
 				"summary": "Find Many calendarEvents",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **calendarEvents**",
 				"operationId": "findManyCalendarEvents",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -6456,7 +6495,7 @@
 				}
 			}
 		},
-		"/rest/batch/calendarEvents": {
+		"/batch/calendarEvents": {
 			"post": {
 				"tags": ["calendarEvents"],
 				"summary": "Create Many calendarEvents",
@@ -6500,7 +6539,7 @@
 				}
 			}
 		},
-		"/rest/calendarEvents/{id}": {
+		"/calendarEvents/{id}": {
 			"get": {
 				"tags": ["calendarEvents"],
 				"summary": "Find One calendarEvent",
@@ -6607,7 +6646,7 @@
 				}
 			}
 		},
-		"/rest/calendarEvents/duplicates": {
+		"/calendarEvents/duplicates": {
 			"post": {
 				"tags": ["calendarEvents"],
 				"summary": "Find calendarEvent Duplicates",
@@ -6672,19 +6711,19 @@
 				}
 			}
 		},
-		"/rest/companies": {
+		"/companies": {
 			"get": {
 				"tags": ["companies"],
 				"summary": "Find Many companies",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **companies**",
 				"operationId": "findManyCompanies",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -6757,7 +6796,7 @@
 				}
 			}
 		},
-		"/rest/batch/companies": {
+		"/batch/companies": {
 			"post": {
 				"tags": ["companies"],
 				"summary": "Create Many companies",
@@ -6798,7 +6837,7 @@
 				}
 			}
 		},
-		"/rest/companies/{id}": {
+		"/companies/{id}": {
 			"get": {
 				"tags": ["companies"],
 				"summary": "Find One company",
@@ -6901,7 +6940,7 @@
 				}
 			}
 		},
-		"/rest/companies/duplicates": {
+		"/companies/duplicates": {
 			"post": {
 				"tags": ["companies"],
 				"summary": "Find company Duplicates",
@@ -6963,19 +7002,19 @@
 				}
 			}
 		},
-		"/rest/connectedAccounts": {
+		"/connectedAccounts": {
 			"get": {
 				"tags": ["connectedAccounts"],
 				"summary": "Find Many connectedAccounts",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **connectedAccounts**",
 				"operationId": "findManyConnectedAccounts",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -7050,7 +7089,7 @@
 				}
 			}
 		},
-		"/rest/batch/connectedAccounts": {
+		"/batch/connectedAccounts": {
 			"post": {
 				"tags": ["connectedAccounts"],
 				"summary": "Create Many connectedAccounts",
@@ -7094,7 +7133,7 @@
 				}
 			}
 		},
-		"/rest/connectedAccounts/{id}": {
+		"/connectedAccounts/{id}": {
 			"get": {
 				"tags": ["connectedAccounts"],
 				"summary": "Find One connectedAccount",
@@ -7203,7 +7242,7 @@
 				}
 			}
 		},
-		"/rest/connectedAccounts/duplicates": {
+		"/connectedAccounts/duplicates": {
 			"post": {
 				"tags": ["connectedAccounts"],
 				"summary": "Find connectedAccount Duplicates",
@@ -7268,19 +7307,19 @@
 				}
 			}
 		},
-		"/rest/favoriteFolders": {
+		"/favoriteFolders": {
 			"get": {
 				"tags": ["favoriteFolders"],
 				"summary": "Find Many favoriteFolders",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **favoriteFolders**",
 				"operationId": "findManyFavoriteFolders",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -7355,7 +7394,7 @@
 				}
 			}
 		},
-		"/rest/batch/favoriteFolders": {
+		"/batch/favoriteFolders": {
 			"post": {
 				"tags": ["favoriteFolders"],
 				"summary": "Create Many favoriteFolders",
@@ -7399,7 +7438,7 @@
 				}
 			}
 		},
-		"/rest/favoriteFolders/{id}": {
+		"/favoriteFolders/{id}": {
 			"get": {
 				"tags": ["favoriteFolders"],
 				"summary": "Find One favoriteFolder",
@@ -7508,7 +7547,7 @@
 				}
 			}
 		},
-		"/rest/favoriteFolders/duplicates": {
+		"/favoriteFolders/duplicates": {
 			"post": {
 				"tags": ["favoriteFolders"],
 				"summary": "Find favoriteFolder Duplicates",
@@ -7573,19 +7612,19 @@
 				}
 			}
 		},
-		"/rest/favorites": {
+		"/favorites": {
 			"get": {
 				"tags": ["favorites"],
 				"summary": "Find Many favorites",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **favorites**",
 				"operationId": "findManyFavorites",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -7658,7 +7697,7 @@
 				}
 			}
 		},
-		"/rest/batch/favorites": {
+		"/batch/favorites": {
 			"post": {
 				"tags": ["favorites"],
 				"summary": "Create Many favorites",
@@ -7699,7 +7738,7 @@
 				}
 			}
 		},
-		"/rest/favorites/{id}": {
+		"/favorites/{id}": {
 			"get": {
 				"tags": ["favorites"],
 				"summary": "Find One favorite",
@@ -7802,7 +7841,7 @@
 				}
 			}
 		},
-		"/rest/favorites/duplicates": {
+		"/favorites/duplicates": {
 			"post": {
 				"tags": ["favorites"],
 				"summary": "Find favorite Duplicates",
@@ -7864,19 +7903,19 @@
 				}
 			}
 		},
-		"/rest/messageChannelMessageAssociations": {
+		"/messageChannelMessageAssociations": {
 			"get": {
 				"tags": ["messageChannelMessageAssociations"],
 				"summary": "Find Many messageChannelMessageAssociations",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **messageChannelMessageAssociations**",
 				"operationId": "findManyMessageChannelMessageAssociations",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -7955,7 +7994,7 @@
 				}
 			}
 		},
-		"/rest/batch/messageChannelMessageAssociations": {
+		"/batch/messageChannelMessageAssociations": {
 			"post": {
 				"tags": ["messageChannelMessageAssociations"],
 				"summary": "Create Many messageChannelMessageAssociations",
@@ -8001,7 +8040,7 @@
 				}
 			}
 		},
-		"/rest/messageChannelMessageAssociations/{id}": {
+		"/messageChannelMessageAssociations/{id}": {
 			"get": {
 				"tags": ["messageChannelMessageAssociations"],
 				"summary": "Find One messageChannelMessageAssociation",
@@ -8110,7 +8149,7 @@
 				}
 			}
 		},
-		"/rest/messageChannelMessageAssociations/duplicates": {
+		"/messageChannelMessageAssociations/duplicates": {
 			"post": {
 				"tags": ["messageChannelMessageAssociations"],
 				"summary": "Find messageChannelMessageAssociation Duplicates",
@@ -8177,19 +8216,19 @@
 				}
 			}
 		},
-		"/rest/messageChannels": {
+		"/messageChannels": {
 			"get": {
 				"tags": ["messageChannels"],
 				"summary": "Find Many messageChannels",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **messageChannels**",
 				"operationId": "findManyMessageChannels",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -8264,7 +8303,7 @@
 				}
 			}
 		},
-		"/rest/batch/messageChannels": {
+		"/batch/messageChannels": {
 			"post": {
 				"tags": ["messageChannels"],
 				"summary": "Create Many messageChannels",
@@ -8308,7 +8347,7 @@
 				}
 			}
 		},
-		"/rest/messageChannels/{id}": {
+		"/messageChannels/{id}": {
 			"get": {
 				"tags": ["messageChannels"],
 				"summary": "Find One messageChannel",
@@ -8417,7 +8456,7 @@
 				}
 			}
 		},
-		"/rest/messageChannels/duplicates": {
+		"/messageChannels/duplicates": {
 			"post": {
 				"tags": ["messageChannels"],
 				"summary": "Find messageChannel Duplicates",
@@ -8482,19 +8521,19 @@
 				}
 			}
 		},
-		"/rest/messageFolders": {
+		"/messageFolders": {
 			"get": {
 				"tags": ["messageFolders"],
 				"summary": "Find Many messageFolders",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **messageFolders**",
 				"operationId": "findManyMessageFolders",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -8569,7 +8608,7 @@
 				}
 			}
 		},
-		"/rest/batch/messageFolders": {
+		"/batch/messageFolders": {
 			"post": {
 				"tags": ["messageFolders"],
 				"summary": "Create Many messageFolders",
@@ -8613,7 +8652,7 @@
 				}
 			}
 		},
-		"/rest/messageFolders/{id}": {
+		"/messageFolders/{id}": {
 			"get": {
 				"tags": ["messageFolders"],
 				"summary": "Find One messageFolder",
@@ -8720,7 +8759,7 @@
 				}
 			}
 		},
-		"/rest/messageFolders/duplicates": {
+		"/messageFolders/duplicates": {
 			"post": {
 				"tags": ["messageFolders"],
 				"summary": "Find messageFolder Duplicates",
@@ -8785,19 +8824,19 @@
 				}
 			}
 		},
-		"/rest/messageParticipants": {
+		"/messageParticipants": {
 			"get": {
 				"tags": ["messageParticipants"],
 				"summary": "Find Many messageParticipants",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **messageParticipants**",
 				"operationId": "findManyMessageParticipants",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -8872,7 +8911,7 @@
 				}
 			}
 		},
-		"/rest/batch/messageParticipants": {
+		"/batch/messageParticipants": {
 			"post": {
 				"tags": ["messageParticipants"],
 				"summary": "Create Many messageParticipants",
@@ -8916,7 +8955,7 @@
 				}
 			}
 		},
-		"/rest/messageParticipants/{id}": {
+		"/messageParticipants/{id}": {
 			"get": {
 				"tags": ["messageParticipants"],
 				"summary": "Find One messageParticipant",
@@ -9025,7 +9064,7 @@
 				}
 			}
 		},
-		"/rest/messageParticipants/duplicates": {
+		"/messageParticipants/duplicates": {
 			"post": {
 				"tags": ["messageParticipants"],
 				"summary": "Find messageParticipant Duplicates",
@@ -9092,19 +9131,19 @@
 				}
 			}
 		},
-		"/rest/messages": {
+		"/messages": {
 			"get": {
 				"tags": ["messages"],
 				"summary": "Find Many messages",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **messages**",
 				"operationId": "findManyMessages",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -9177,7 +9216,7 @@
 				}
 			}
 		},
-		"/rest/batch/messages": {
+		"/batch/messages": {
 			"post": {
 				"tags": ["messages"],
 				"summary": "Create Many messages",
@@ -9218,7 +9257,7 @@
 				}
 			}
 		},
-		"/rest/messages/{id}": {
+		"/messages/{id}": {
 			"get": {
 				"tags": ["messages"],
 				"summary": "Find One message",
@@ -9321,7 +9360,7 @@
 				}
 			}
 		},
-		"/rest/messages/duplicates": {
+		"/messages/duplicates": {
 			"post": {
 				"tags": ["messages"],
 				"summary": "Find message Duplicates",
@@ -9383,19 +9422,19 @@
 				}
 			}
 		},
-		"/rest/messageThreads": {
+		"/messageThreads": {
 			"get": {
 				"tags": ["messageThreads"],
 				"summary": "Find Many messageThreads",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **messageThreads**",
 				"operationId": "findManyMessageThreads",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -9470,7 +9509,7 @@
 				}
 			}
 		},
-		"/rest/batch/messageThreads": {
+		"/batch/messageThreads": {
 			"post": {
 				"tags": ["messageThreads"],
 				"summary": "Create Many messageThreads",
@@ -9514,7 +9553,7 @@
 				}
 			}
 		},
-		"/rest/messageThreads/{id}": {
+		"/messageThreads/{id}": {
 			"get": {
 				"tags": ["messageThreads"],
 				"summary": "Find One messageThread",
@@ -9621,7 +9660,7 @@
 				}
 			}
 		},
-		"/rest/messageThreads/duplicates": {
+		"/messageThreads/duplicates": {
 			"post": {
 				"tags": ["messageThreads"],
 				"summary": "Find messageThread Duplicates",
@@ -9686,19 +9725,19 @@
 				}
 			}
 		},
-		"/rest/notes": {
+		"/notes": {
 			"get": {
 				"tags": ["notes"],
 				"summary": "Find Many notes",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **notes**",
 				"operationId": "findManyNotes",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -9769,7 +9808,7 @@
 				}
 			}
 		},
-		"/rest/batch/notes": {
+		"/batch/notes": {
 			"post": {
 				"tags": ["notes"],
 				"summary": "Create Many notes",
@@ -9810,7 +9849,7 @@
 				}
 			}
 		},
-		"/rest/notes/{id}": {
+		"/notes/{id}": {
 			"get": {
 				"tags": ["notes"],
 				"summary": "Find One note",
@@ -9911,7 +9950,7 @@
 				}
 			}
 		},
-		"/rest/notes/duplicates": {
+		"/notes/duplicates": {
 			"post": {
 				"tags": ["notes"],
 				"summary": "Find note Duplicates",
@@ -9973,19 +10012,19 @@
 				}
 			}
 		},
-		"/rest/noteTargets": {
+		"/noteTargets": {
 			"get": {
 				"tags": ["noteTargets"],
 				"summary": "Find Many noteTargets",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **noteTargets**",
 				"operationId": "findManyNoteTargets",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -10058,7 +10097,7 @@
 				}
 			}
 		},
-		"/rest/batch/noteTargets": {
+		"/batch/noteTargets": {
 			"post": {
 				"tags": ["noteTargets"],
 				"summary": "Create Many noteTargets",
@@ -10099,7 +10138,7 @@
 				}
 			}
 		},
-		"/rest/noteTargets/{id}": {
+		"/noteTargets/{id}": {
 			"get": {
 				"tags": ["noteTargets"],
 				"summary": "Find One noteTarget",
@@ -10202,7 +10241,7 @@
 				}
 			}
 		},
-		"/rest/noteTargets/duplicates": {
+		"/noteTargets/duplicates": {
 			"post": {
 				"tags": ["noteTargets"],
 				"summary": "Find noteTarget Duplicates",
@@ -10267,19 +10306,19 @@
 				}
 			}
 		},
-		"/rest/opportunities": {
+		"/opportunities": {
 			"get": {
 				"tags": ["opportunities"],
 				"summary": "Find Many opportunities",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **opportunities**",
 				"operationId": "findManyOpportunities",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -10354,7 +10393,7 @@
 				}
 			}
 		},
-		"/rest/batch/opportunities": {
+		"/batch/opportunities": {
 			"post": {
 				"tags": ["opportunities"],
 				"summary": "Create Many opportunities",
@@ -10395,7 +10434,7 @@
 				}
 			}
 		},
-		"/rest/opportunities/{id}": {
+		"/opportunities/{id}": {
 			"get": {
 				"tags": ["opportunities"],
 				"summary": "Find One opportunity",
@@ -10502,7 +10541,7 @@
 				}
 			}
 		},
-		"/rest/opportunities/duplicates": {
+		"/opportunities/duplicates": {
 			"post": {
 				"tags": ["opportunities"],
 				"summary": "Find opportunity Duplicates",
@@ -10567,19 +10606,19 @@
 				}
 			}
 		},
-		"/rest/people": {
+		"/people": {
 			"get": {
 				"tags": ["people"],
 				"summary": "Find Many people",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **people**",
 				"operationId": "findManyPeople",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -10650,7 +10689,7 @@
 				}
 			}
 		},
-		"/rest/batch/people": {
+		"/batch/people": {
 			"post": {
 				"tags": ["people"],
 				"summary": "Create Many people",
@@ -10691,7 +10730,7 @@
 				}
 			}
 		},
-		"/rest/people/{id}": {
+		"/people/{id}": {
 			"get": {
 				"tags": ["people"],
 				"summary": "Find One person",
@@ -10794,7 +10833,7 @@
 				}
 			}
 		},
-		"/rest/people/duplicates": {
+		"/people/duplicates": {
 			"post": {
 				"tags": ["people"],
 				"summary": "Find person Duplicates",
@@ -10856,19 +10895,19 @@
 				}
 			}
 		},
-		"/rest/tasks": {
+		"/tasks": {
 			"get": {
 				"tags": ["tasks"],
 				"summary": "Find Many tasks",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **tasks**",
 				"operationId": "findManyTasks",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -10939,7 +10978,7 @@
 				}
 			}
 		},
-		"/rest/batch/tasks": {
+		"/batch/tasks": {
 			"post": {
 				"tags": ["tasks"],
 				"summary": "Create Many tasks",
@@ -10980,7 +11019,7 @@
 				}
 			}
 		},
-		"/rest/tasks/{id}": {
+		"/tasks/{id}": {
 			"get": {
 				"tags": ["tasks"],
 				"summary": "Find One task",
@@ -11081,7 +11120,7 @@
 				}
 			}
 		},
-		"/rest/tasks/duplicates": {
+		"/tasks/duplicates": {
 			"post": {
 				"tags": ["tasks"],
 				"summary": "Find task Duplicates",
@@ -11143,19 +11182,19 @@
 				}
 			}
 		},
-		"/rest/taskTargets": {
+		"/taskTargets": {
 			"get": {
 				"tags": ["taskTargets"],
 				"summary": "Find Many taskTargets",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **taskTargets**",
 				"operationId": "findManyTaskTargets",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -11228,7 +11267,7 @@
 				}
 			}
 		},
-		"/rest/batch/taskTargets": {
+		"/batch/taskTargets": {
 			"post": {
 				"tags": ["taskTargets"],
 				"summary": "Create Many taskTargets",
@@ -11269,7 +11308,7 @@
 				}
 			}
 		},
-		"/rest/taskTargets/{id}": {
+		"/taskTargets/{id}": {
 			"get": {
 				"tags": ["taskTargets"],
 				"summary": "Find One taskTarget",
@@ -11372,7 +11411,7 @@
 				}
 			}
 		},
-		"/rest/taskTargets/duplicates": {
+		"/taskTargets/duplicates": {
 			"post": {
 				"tags": ["taskTargets"],
 				"summary": "Find taskTarget Duplicates",
@@ -11437,19 +11476,19 @@
 				}
 			}
 		},
-		"/rest/timelineActivities": {
+		"/timelineActivities": {
 			"get": {
 				"tags": ["timelineActivities"],
 				"summary": "Find Many timelineActivities",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **timelineActivities**",
 				"operationId": "findManyTimelineActivities",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -11524,7 +11563,7 @@
 				}
 			}
 		},
-		"/rest/batch/timelineActivities": {
+		"/batch/timelineActivities": {
 			"post": {
 				"tags": ["timelineActivities"],
 				"summary": "Create Many timelineActivities",
@@ -11568,7 +11607,7 @@
 				}
 			}
 		},
-		"/rest/timelineActivities/{id}": {
+		"/timelineActivities/{id}": {
 			"get": {
 				"tags": ["timelineActivities"],
 				"summary": "Find One timelineActivity",
@@ -11677,7 +11716,7 @@
 				}
 			}
 		},
-		"/rest/timelineActivities/duplicates": {
+		"/timelineActivities/duplicates": {
 			"post": {
 				"tags": ["timelineActivities"],
 				"summary": "Find timelineActivity Duplicates",
@@ -11742,19 +11781,19 @@
 				}
 			}
 		},
-		"/rest/viewFields": {
+		"/viewFields": {
 			"get": {
 				"tags": ["viewFields"],
 				"summary": "Find Many viewFields",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **viewFields**",
 				"operationId": "findManyViewFields",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -11827,7 +11866,7 @@
 				}
 			}
 		},
-		"/rest/batch/viewFields": {
+		"/batch/viewFields": {
 			"post": {
 				"tags": ["viewFields"],
 				"summary": "Create Many viewFields",
@@ -11868,7 +11907,7 @@
 				}
 			}
 		},
-		"/rest/viewFields/{id}": {
+		"/viewFields/{id}": {
 			"get": {
 				"tags": ["viewFields"],
 				"summary": "Find One viewField",
@@ -11971,7 +12010,7 @@
 				}
 			}
 		},
-		"/rest/viewFields/duplicates": {
+		"/viewFields/duplicates": {
 			"post": {
 				"tags": ["viewFields"],
 				"summary": "Find viewField Duplicates",
@@ -12036,19 +12075,19 @@
 				}
 			}
 		},
-		"/rest/viewFilterGroups": {
+		"/viewFilterGroups": {
 			"get": {
 				"tags": ["viewFilterGroups"],
 				"summary": "Find Many viewFilterGroups",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **viewFilterGroups**",
 				"operationId": "findManyViewFilterGroups",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -12123,7 +12162,7 @@
 				}
 			}
 		},
-		"/rest/batch/viewFilterGroups": {
+		"/batch/viewFilterGroups": {
 			"post": {
 				"tags": ["viewFilterGroups"],
 				"summary": "Create Many viewFilterGroups",
@@ -12167,7 +12206,7 @@
 				}
 			}
 		},
-		"/rest/viewFilterGroups/{id}": {
+		"/viewFilterGroups/{id}": {
 			"get": {
 				"tags": ["viewFilterGroups"],
 				"summary": "Find One viewFilterGroup",
@@ -12276,7 +12315,7 @@
 				}
 			}
 		},
-		"/rest/viewFilterGroups/duplicates": {
+		"/viewFilterGroups/duplicates": {
 			"post": {
 				"tags": ["viewFilterGroups"],
 				"summary": "Find viewFilterGroup Duplicates",
@@ -12341,19 +12380,19 @@
 				}
 			}
 		},
-		"/rest/viewFilters": {
+		"/viewFilters": {
 			"get": {
 				"tags": ["viewFilters"],
 				"summary": "Find Many viewFilters",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **viewFilters**",
 				"operationId": "findManyViewFilters",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -12426,7 +12465,7 @@
 				}
 			}
 		},
-		"/rest/batch/viewFilters": {
+		"/batch/viewFilters": {
 			"post": {
 				"tags": ["viewFilters"],
 				"summary": "Create Many viewFilters",
@@ -12467,7 +12506,7 @@
 				}
 			}
 		},
-		"/rest/viewFilters/{id}": {
+		"/viewFilters/{id}": {
 			"get": {
 				"tags": ["viewFilters"],
 				"summary": "Find One viewFilter",
@@ -12570,7 +12609,7 @@
 				}
 			}
 		},
-		"/rest/viewFilters/duplicates": {
+		"/viewFilters/duplicates": {
 			"post": {
 				"tags": ["viewFilters"],
 				"summary": "Find viewFilter Duplicates",
@@ -12635,19 +12674,19 @@
 				}
 			}
 		},
-		"/rest/viewGroups": {
+		"/viewGroups": {
 			"get": {
 				"tags": ["viewGroups"],
 				"summary": "Find Many viewGroups",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **viewGroups**",
 				"operationId": "findManyViewGroups",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -12720,7 +12759,7 @@
 				}
 			}
 		},
-		"/rest/batch/viewGroups": {
+		"/batch/viewGroups": {
 			"post": {
 				"tags": ["viewGroups"],
 				"summary": "Create Many viewGroups",
@@ -12761,7 +12800,7 @@
 				}
 			}
 		},
-		"/rest/viewGroups/{id}": {
+		"/viewGroups/{id}": {
 			"get": {
 				"tags": ["viewGroups"],
 				"summary": "Find One viewGroup",
@@ -12864,7 +12903,7 @@
 				}
 			}
 		},
-		"/rest/viewGroups/duplicates": {
+		"/viewGroups/duplicates": {
 			"post": {
 				"tags": ["viewGroups"],
 				"summary": "Find viewGroup Duplicates",
@@ -12929,19 +12968,19 @@
 				}
 			}
 		},
-		"/rest/views": {
+		"/views": {
 			"get": {
 				"tags": ["views"],
 				"summary": "Find Many views",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **views**",
 				"operationId": "findManyViews",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -13012,7 +13051,7 @@
 				}
 			}
 		},
-		"/rest/batch/views": {
+		"/batch/views": {
 			"post": {
 				"tags": ["views"],
 				"summary": "Create Many views",
@@ -13053,7 +13092,7 @@
 				}
 			}
 		},
-		"/rest/views/{id}": {
+		"/views/{id}": {
 			"get": {
 				"tags": ["views"],
 				"summary": "Find One view",
@@ -13154,7 +13193,7 @@
 				}
 			}
 		},
-		"/rest/views/duplicates": {
+		"/views/duplicates": {
 			"post": {
 				"tags": ["views"],
 				"summary": "Find view Duplicates",
@@ -13216,19 +13255,19 @@
 				}
 			}
 		},
-		"/rest/viewSorts": {
+		"/viewSorts": {
 			"get": {
 				"tags": ["viewSorts"],
 				"summary": "Find Many viewSorts",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **viewSorts**",
 				"operationId": "findManyViewSorts",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -13301,7 +13340,7 @@
 				}
 			}
 		},
-		"/rest/batch/viewSorts": {
+		"/batch/viewSorts": {
 			"post": {
 				"tags": ["viewSorts"],
 				"summary": "Create Many viewSorts",
@@ -13342,7 +13381,7 @@
 				}
 			}
 		},
-		"/rest/viewSorts/{id}": {
+		"/viewSorts/{id}": {
 			"get": {
 				"tags": ["viewSorts"],
 				"summary": "Find One viewSort",
@@ -13445,7 +13484,7 @@
 				}
 			}
 		},
-		"/rest/viewSorts/duplicates": {
+		"/viewSorts/duplicates": {
 			"post": {
 				"tags": ["viewSorts"],
 				"summary": "Find viewSort Duplicates",
@@ -13507,19 +13546,19 @@
 				}
 			}
 		},
-		"/rest/webhooks": {
+		"/webhooks": {
 			"get": {
 				"tags": ["webhooks"],
 				"summary": "Find Many webhooks",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **webhooks**",
 				"operationId": "findManyWebhooks",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -13592,7 +13631,7 @@
 				}
 			}
 		},
-		"/rest/batch/webhooks": {
+		"/batch/webhooks": {
 			"post": {
 				"tags": ["webhooks"],
 				"summary": "Create Many webhooks",
@@ -13633,7 +13672,7 @@
 				}
 			}
 		},
-		"/rest/webhooks/{id}": {
+		"/webhooks/{id}": {
 			"get": {
 				"tags": ["webhooks"],
 				"summary": "Find One webhook",
@@ -13736,7 +13775,7 @@
 				}
 			}
 		},
-		"/rest/webhooks/duplicates": {
+		"/webhooks/duplicates": {
 			"post": {
 				"tags": ["webhooks"],
 				"summary": "Find webhook Duplicates",
@@ -13798,19 +13837,19 @@
 				}
 			}
 		},
-		"/rest/workflowAutomatedTriggers": {
+		"/workflowAutomatedTriggers": {
 			"get": {
 				"tags": ["workflowAutomatedTriggers"],
 				"summary": "Find Many workflowAutomatedTriggers",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **workflowAutomatedTriggers**",
 				"operationId": "findManyWorkflowAutomatedTriggers",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -13889,7 +13928,7 @@
 				}
 			}
 		},
-		"/rest/batch/workflowAutomatedTriggers": {
+		"/batch/workflowAutomatedTriggers": {
 			"post": {
 				"tags": ["workflowAutomatedTriggers"],
 				"summary": "Create Many workflowAutomatedTriggers",
@@ -13935,7 +13974,7 @@
 				}
 			}
 		},
-		"/rest/workflowAutomatedTriggers/{id}": {
+		"/workflowAutomatedTriggers/{id}": {
 			"get": {
 				"tags": ["workflowAutomatedTriggers"],
 				"summary": "Find One workflowAutomatedTrigger",
@@ -14044,7 +14083,7 @@
 				}
 			}
 		},
-		"/rest/workflowAutomatedTriggers/duplicates": {
+		"/workflowAutomatedTriggers/duplicates": {
 			"post": {
 				"tags": ["workflowAutomatedTriggers"],
 				"summary": "Find workflowAutomatedTrigger Duplicates",
@@ -14111,19 +14150,19 @@
 				}
 			}
 		},
-		"/rest/workflowRuns": {
+		"/workflowRuns": {
 			"get": {
 				"tags": ["workflowRuns"],
 				"summary": "Find Many workflowRuns",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **workflowRuns**",
 				"operationId": "findManyWorkflowRuns",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -14198,7 +14237,7 @@
 				}
 			}
 		},
-		"/rest/batch/workflowRuns": {
+		"/batch/workflowRuns": {
 			"post": {
 				"tags": ["workflowRuns"],
 				"summary": "Create Many workflowRuns",
@@ -14239,7 +14278,7 @@
 				}
 			}
 		},
-		"/rest/workflowRuns/{id}": {
+		"/workflowRuns/{id}": {
 			"get": {
 				"tags": ["workflowRuns"],
 				"summary": "Find One workflowRun",
@@ -14346,7 +14385,7 @@
 				}
 			}
 		},
-		"/rest/workflowRuns/duplicates": {
+		"/workflowRuns/duplicates": {
 			"post": {
 				"tags": ["workflowRuns"],
 				"summary": "Find workflowRun Duplicates",
@@ -14411,19 +14450,19 @@
 				}
 			}
 		},
-		"/rest/workflows": {
+		"/workflows": {
 			"get": {
 				"tags": ["workflows"],
 				"summary": "Find Many workflows",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **workflows**",
 				"operationId": "findManyWorkflows",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -14496,7 +14535,7 @@
 				}
 			}
 		},
-		"/rest/batch/workflows": {
+		"/batch/workflows": {
 			"post": {
 				"tags": ["workflows"],
 				"summary": "Create Many workflows",
@@ -14537,7 +14576,7 @@
 				}
 			}
 		},
-		"/rest/workflows/{id}": {
+		"/workflows/{id}": {
 			"get": {
 				"tags": ["workflows"],
 				"summary": "Find One workflow",
@@ -14640,7 +14679,7 @@
 				}
 			}
 		},
-		"/rest/workflows/duplicates": {
+		"/workflows/duplicates": {
 			"post": {
 				"tags": ["workflows"],
 				"summary": "Find workflow Duplicates",
@@ -14702,19 +14741,19 @@
 				}
 			}
 		},
-		"/rest/workflowVersions": {
+		"/workflowVersions": {
 			"get": {
 				"tags": ["workflowVersions"],
 				"summary": "Find Many workflowVersions",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **workflowVersions**",
 				"operationId": "findManyWorkflowVersions",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -14789,7 +14828,7 @@
 				}
 			}
 		},
-		"/rest/batch/workflowVersions": {
+		"/batch/workflowVersions": {
 			"post": {
 				"tags": ["workflowVersions"],
 				"summary": "Create Many workflowVersions",
@@ -14833,7 +14872,7 @@
 				}
 			}
 		},
-		"/rest/workflowVersions/{id}": {
+		"/workflowVersions/{id}": {
 			"get": {
 				"tags": ["workflowVersions"],
 				"summary": "Find One workflowVersion",
@@ -14942,7 +14981,7 @@
 				}
 			}
 		},
-		"/rest/workflowVersions/duplicates": {
+		"/workflowVersions/duplicates": {
 			"post": {
 				"tags": ["workflowVersions"],
 				"summary": "Find workflowVersion Duplicates",
@@ -15007,19 +15046,19 @@
 				}
 			}
 		},
-		"/rest/workspaceMembers": {
+		"/workspaceMembers": {
 			"get": {
 				"tags": ["workspaceMembers"],
 				"summary": "Find Many workspaceMembers",
 				"description": "**order_by**, **filter**, **limit**, **depth**, **starting_after** or **ending_before** can be provided to request your **workspaceMembers**",
 				"operationId": "findManyWorkspaceMembers",
 				"parameters": [
-
-
+					{ "$ref": "#/components/parameters/orderBy" },
+					{ "$ref": "#/components/parameters/filter" },
 					{ "$ref": "#/components/parameters/limit" },
-					{ "$ref": "#/components/parameters/depth" }
-
-
+					{ "$ref": "#/components/parameters/depth" },
+					{ "$ref": "#/components/parameters/startingAfter" },
+					{ "$ref": "#/components/parameters/endingBefore" }
 				],
 				"responses": {
 					"200": {
@@ -15094,7 +15133,7 @@
 				}
 			}
 		},
-		"/rest/batch/workspaceMembers": {
+		"/batch/workspaceMembers": {
 			"post": {
 				"tags": ["workspaceMembers"],
 				"summary": "Create Many workspaceMembers",
@@ -15138,7 +15177,7 @@
 				}
 			}
 		},
-		"/rest/workspaceMembers/{id}": {
+		"/workspaceMembers/{id}": {
 			"get": {
 				"tags": ["workspaceMembers"],
 				"summary": "Find One workspaceMember",
@@ -15247,7 +15286,7 @@
 				}
 			}
 		},
-		"/rest/workspaceMembers/duplicates": {
+		"/workspaceMembers/duplicates": {
 			"post": {
 				"tags": ["workspaceMembers"],
 				"summary": "Find workspaceMember Duplicates",
