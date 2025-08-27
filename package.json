@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-twenty-fork",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "n8n node for Twenty CRM v1.4.0+ API with unified search, smart field resolution, and custom field support",
   "keywords": [
     "n8n-community-node-package",
