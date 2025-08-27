@@ -966,6 +966,7 @@ export async function resolveFieldName(
 	resolvedField: string | null;
 	fieldExists: boolean;
 	triedFields: string[];
+	fallbackUsed?: boolean;
 }> {
 	const candidates = [
 		fieldInput,                           // Exact: "instagram"
@@ -983,7 +984,9 @@ export async function resolveFieldName(
 		const metadata = await twentyApiMetadataRequest.call(
 			this,
 			'GET',
-			`/objects/${objectName}/fields`
+			`/fields`,
+			{},
+			{ filter: `object.nameSingular[eq]:"${objectName}"` }
 		);
 		
 		if (!metadata?.data) {
@@ -1015,10 +1018,16 @@ export async function resolveFieldName(
 		};
 		
 	} catch (error) {
-		throw new NodeOperationError(
-			this.getNode(),
-			`Failed to resolve field name: ${error.message}`
-		);
+		// Fallback: try the field name directly if metadata API fails
+		// Use the first candidate (exact field name) as fallback
+		const fallbackField = uniqueCandidates[0];
+		
+		return {
+			resolvedField: fallbackField,
+			fieldExists: false, // We couldn't validate but we're trying anyway
+			triedFields: uniqueCandidates,
+			fallbackUsed: true
+		};
 	}
 }
 
@@ -1062,7 +1071,7 @@ export async function findPersonUnified(
 				// Resolve field name with fallback
 				const fieldResolution = await resolveFieldName.call(this, 'person', customFieldName);
 				
-				if (!fieldResolution.fieldExists) {
+				if (!fieldResolution.fieldExists && !fieldResolution.fallbackUsed) {
 					throw new NodeOperationError(
 						this.getNode(),
 						`Field "${customFieldName}" not found. Tried: ${fieldResolution.triedFields.join(', ')}.`
@@ -1175,7 +1184,7 @@ export async function findCompanyUnified(
 				// Resolve field name with fallback
 				const fieldResolution = await resolveFieldName.call(this, 'company', customFieldName);
 				
-				if (!fieldResolution.fieldExists) {
+				if (!fieldResolution.fieldExists && !fieldResolution.fallbackUsed) {
 					throw new NodeOperationError(
 						this.getNode(),
 						`Field "${customFieldName}" not found. Tried: ${fieldResolution.triedFields.join(', ')}.`

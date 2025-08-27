@@ -950,13 +950,11 @@ export class Twenty implements INodeType {
 						}
 
 						if (additionalFields.phone || additionalFields.phoneCountryCode || additionalFields.phoneCallingCode) {
-							// Preserve existing phone data and only update provided fields
-							const currentPhones = findResult.person.phones || {};
+							// Simple phone structure - only include provided fields
 							updateData.phones = {
-								primaryPhoneNumber: additionalFields.phone !== undefined ? additionalFields.phone : (currentPhones.primaryPhoneNumber || ''),
-								primaryPhoneCountryCode: additionalFields.phoneCountryCode !== undefined ? additionalFields.phoneCountryCode : (currentPhones.primaryPhoneCountryCode || ''),
-								primaryPhoneCallingCode: additionalFields.phoneCallingCode !== undefined ? additionalFields.phoneCallingCode : (currentPhones.primaryPhoneCallingCode || ''),
-								additionalPhones: currentPhones.additionalPhones || []
+								primaryPhoneNumber: additionalFields.phone || '',
+								primaryPhoneCountryCode: additionalFields.phoneCountryCode || '',
+								primaryPhoneCallingCode: additionalFields.phoneCallingCode || ''
 							};
 						}
 
@@ -992,7 +990,7 @@ export class Twenty implements INodeType {
 									// Resolve field name with fallback
 									const fieldResolution = await resolveFieldName.call(this, 'person', field.fieldName);
 									
-									if (fieldResolution.fieldExists) {
+									if (fieldResolution.fieldExists || fieldResolution.fallbackUsed) {
 										const resolvedField = fieldResolution.resolvedField!;
 										
 										if (resolvedField.includes('Link')) {
@@ -1002,6 +1000,8 @@ export class Twenty implements INodeType {
 											// For text fields
 											updateData[resolvedField] = field.fieldValue;
 										}
+										
+										// Note: Field validation was skipped if fallback was used
 									} else {
 										throw new NodeOperationError(
 											this.getNode(),
