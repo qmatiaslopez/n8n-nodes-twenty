@@ -8,17 +8,14 @@ import {
 } from 'n8n-workflow';
 
 import {
-	findPersonByEmail,
-	findCompanyByName,
-	findCompanyByDomain,
-	getPersonFullProfile,
-	getCompanyIntelligence,
 	findOrCreateContact,
 	findOrCreateCompany,
 	updateContactByEmail,
 	updateCompanyByName,
-	syncContactData,
 	twentyApiRequest,
+	findPersonUnified,
+	findCompanyUnified,
+	listPersonsByCompany,
 } from './GenericFunctions';
 
 export class Twenty implements INodeType {
@@ -47,156 +44,129 @@ export class Twenty implements INodeType {
 				name: 'useCase',
 				type: 'options',
 				options: [
+					// PERSON OPERATIONS
 					{
-						name: 'Update Company by Name',
-						value: 'updateCompanyByName',
-						description: 'Update company information using name as identifier',
+						name: 'Find Person',
+						value: 'findPerson',
+						description: 'Search for a person using various criteria',
 					},
 					{
-						name: 'Update Contact by Email',
-						value: 'updateContactByEmail',
-						description: 'Update contact information using email as identifier',
+						name: 'Create Person',
+						value: 'createPerson',
+						description: 'Create a new person',
 					},
 					{
-						name: 'Find Company by Domain',
-						value: 'findCompanyByDomain',
-						description: 'Search for a company using its website domain',
+						name: 'Update Person',
+						value: 'updatePerson',
+						description: 'Update an existing person',
 					},
 					{
-						name: 'Add Company',
-						value: 'addCompany',
+						name: 'Delete Person',
+						value: 'deletePerson',
+						description: 'Delete a person',
+					},
+					{
+						name: 'List People by Company',
+						value: 'listPersonsByCompany',
+						description: 'List all people associated with a company',
+					},
+					// COMPANY OPERATIONS
+					{
+						name: 'Find Company',
+						value: 'findCompany',
+						description: 'Search for a company using various criteria',
+					},
+					{
+						name: 'Create Company',
+						value: 'createCompany',
 						description: 'Create a new company',
 					},
 					{
-						name: 'Find Company by Name',
-						value: 'findCompanyByName',
-						description: 'Search for a company using its name',
+						name: 'Update Company',
+						value: 'updateCompany',
+						description: 'Update an existing company',
 					},
 					{
-						name: 'Find or Create Company',
-						value: 'findOrCreateCompany',
-						description: 'Find company by name/domain, create if not found',
-					},
-					{
-						name: 'Add Contact',
-						value: 'addContact',
-						description: 'Create a new contact',
-					},
-					{
-						name: 'Get Company Intelligence',
-						value: 'getCompanyIntel',
-						description: 'Get company insights and analytics',
-					},
-					{
-						name: 'Get Full Profile',
-						value: 'getFullProfile',
-						description: 'Get complete profile with relationships',
-					},
-					{
-						name: 'Sync Contact Data',
-						value: 'syncContactData',
-						description: 'Smart sync contact data from external sources',
-					},
-					{
-						name: 'Find Contact by Email',
-						value: 'findContactByEmail',
-						description: 'Search for a person using their email address',
-					},
-					{
-						name: 'Find or Create Contact',
-						value: 'findOrCreateContact',
-						description: 'Find contact by email, create if not found',
-					},
-					{
-						name: 'Delete Company by Name',
-						value: 'deleteCompanyByName',
-						description: 'Delete company using name as identifier',
-					},
-					{
-						name: 'Delete Contact by Email',
-						value: 'deleteContactByEmail',
-						description: 'Delete contact using email as identifier',
+						name: 'Delete Company',
+						value: 'deleteCompany',
+						description: 'Delete a company',
 					},
 				],
-				default: 'findContactByEmail',
+				default: 'findPerson',
 			},
 
-			// Email field for contact operations
+			// Search configuration for unified search operations
 			{
-				displayName: 'Email Address',
-				name: 'emailAddress',
+				displayName: 'Search By',
+				name: 'searchBy',
+				type: 'options',
+				options: [
+					{ name: 'Email', value: 'email' },
+					{ name: 'Phone', value: 'phone' },
+					{ name: 'Name', value: 'name' },
+					{ name: 'Custom Field', value: 'customField' },
+				],
+				displayOptions: {
+					show: {
+						useCase: ['findPerson'],
+					},
+				},
+				default: 'email',
+				description: 'How to search for the person',
+			},
+
+			// Search configuration for company
+			{
+				displayName: 'Search By',
+				name: 'searchBy',
+				type: 'options',
+				options: [
+					{ name: 'Name', value: 'name' },
+					{ name: 'Domain', value: 'domain' },
+					{ name: 'Custom Field', value: 'customField' },
+				],
+				displayOptions: {
+					show: {
+						useCase: ['findCompany'],
+					},
+				},
+				default: 'name',
+				description: 'How to search for the company',
+			},
+
+			// Custom field name (for both person and company)
+			{
+				displayName: 'Custom Field Name',
+				name: 'customFieldName',
+				type: 'string',
+				displayOptions: {
+					show: {
+						useCase: ['findPerson', 'findCompany'],
+						searchBy: ['customField'],
+					},
+				},
+				default: '',
+				placeholder: 'instagram, linkedin, etc.',
+				description: 'Field name (will try with "Link" suffix if not found)',
+			},
+
+			// Search value (unified for all search operations)
+			{
+				displayName: 'Search Value',
+				name: 'searchValue',
 				type: 'string',
 				required: true,
 				displayOptions: {
 					show: {
-						useCase: [
-							'findContactByEmail',
-							'findOrCreateContact',
-							'updateContactByEmail',
-							'syncContactData',
-							'deleteContactByEmail',
-						],
+						useCase: ['findPerson', 'findCompany'],
 					},
 				},
 				default: '',
-				placeholder: 'john@example.com',
-				description: 'Email address of the contact',
+				placeholder: 'Value to search for',
+				description: 'The value to search for in the selected field',
 			},
 
-			// Company name field
-			{
-				displayName: 'Company Name',
-				name: 'companyName',
-				type: 'string',
-				required: true,
-				displayOptions: {
-					show: {
-						useCase: [
-							'findCompanyByName',
-							'addCompany',
-							'findOrCreateCompany',
-							'updateCompanyByName',
-							'deleteCompanyByName',
-						],
-					},
-				},
-				default: '',
-				placeholder: 'Acme Corp',
-				description: 'Name of the company',
-			},
-
-			// Domain field
-			{
-				displayName: 'Domain',
-				name: 'domain',
-				type: 'string',
-				required: true,
-				displayOptions: {
-					show: {
-						useCase: ['findCompanyByDomain'],
-					},
-				},
-				default: '',
-				placeholder: 'example.com',
-				description: 'Website domain of the company',
-			},
-
-			// Person ID for profile
-			{
-				displayName: 'Person ID',
-				name: 'personId',
-				type: 'string',
-				required: true,
-				displayOptions: {
-					show: {
-						useCase: ['getFullProfile'],
-					},
-				},
-				default: '',
-				description: 'UUID of the person',
-			},
-
-			// Company ID for intelligence
+			// Company ID for listing people
 			{
 				displayName: 'Company ID',
 				name: 'companyId',
@@ -204,7 +174,7 @@ export class Twenty implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						useCase: ['getCompanyIntel'],
+						useCase: ['listPersonsByCompany'],
 					},
 				},
 				default: '',
@@ -336,99 +306,81 @@ export class Twenty implements INodeType {
 				let responseData: any;
 
 				switch (useCase) {
-					case 'findContactByEmail': {
-						const email = this.getNodeParameter('emailAddress', i) as string;
-						const advancedOptions = this.getNodeParameter('advancedOptions', i, {}) as any;
-						const includeRelated = advancedOptions.includeRelated ?? true;
+					// NEW UNIFIED OPERATIONS
+					case 'findPerson': {
+						const searchBy = this.getNodeParameter('searchBy', i) as string;
+						const searchValue = this.getNodeParameter('searchValue', i) as string;
+						const customFieldName = searchBy === 'customField' 
+							? this.getNodeParameter('customFieldName', i) as string 
+							: undefined;
 
-						const result = await findPersonByEmail.call(this, email, includeRelated);
-						
-						responseData = {
-							found: result.found,
-							contact: result.person,
-							confidence: result.confidence,
-							recordId: result.person?.id || null,
-							searchEmail: email,
-							message: result.found 
-								? `Contact found: ${result.person.name?.firstName} ${result.person.name?.lastName}`
-								: `No contact found with email: ${email}`,
-						};
-						break;
-					}
-					
-					case 'findCompanyByName': {
-						const companyName = this.getNodeParameter('companyName', i) as string;
-						const advancedOptions = this.getNodeParameter('advancedOptions', i, {}) as any;
-						const includeRelated = advancedOptions.includeRelated ?? true;
-
-						const result = await findCompanyByName.call(this, companyName, includeRelated);
-						
-						responseData = {
-							found: result.found,
-							company: result.company,
-							confidence: result.confidence,
-							recordId: result.company?.id || null,
-							searchName: companyName,
-							message: result.found 
-								? `Company found: ${result.company.name}`
-								: `No company found with name: ${companyName}`,
-						};
-						break;
-					}
-
-					case 'findCompanyByDomain': {
-						const domain = this.getNodeParameter('domain', i) as string;
-						const advancedOptions = this.getNodeParameter('advancedOptions', i, {}) as any;
-						const includeRelated = advancedOptions.includeRelated ?? true;
-
-						const result = await findCompanyByDomain.call(this, domain, includeRelated);
-						
-						responseData = {
-							found: result.found,
-							company: result.company,
-							confidence: result.confidence,
-							recordId: result.company?.id || null,
-							searchDomain: domain,
-							message: result.found 
-								? `Company found: ${result.company.name}`
-								: `No company found with domain: ${domain}`,
-						};
-						break;
-					}
-
-					case 'getFullProfile': {
-						const personId = this.getNodeParameter('personId', i) as string;
-
-						const result = await getPersonFullProfile.call(this, personId);
+						const result = await findPersonUnified.call(
+							this, 
+							searchBy, 
+							searchValue, 
+							customFieldName,
+							true
+						);
 						
 						responseData = {
 							found: result.found,
 							person: result.person,
-							profile: result.profile,
-							recordId: personId,
+							confidence: result.confidence,
+							recordId: result.person?.id || null,
+							searchMethod: result.searchMethod,
+							searchValue: result.searchValue,
+							totalMatches: result.totalMatches || 0,
 							message: result.found 
-								? `Full profile retrieved for: ${result.person?.name?.firstName} ${result.person?.name?.lastName}`
-								: `Person not found with ID: ${personId}`,
+								? `Person found: ${result.person.name?.firstName || ''} ${result.person.name?.lastName || ''}`.trim()
+								: `No person found with ${result.searchMethod}: ${result.searchValue}`,
 						};
 						break;
 					}
 
-					case 'getCompanyIntel': {
-						const companyId = this.getNodeParameter('companyId', i) as string;
+					case 'findCompany': {
+						const searchBy = this.getNodeParameter('searchBy', i) as string;
+						const searchValue = this.getNodeParameter('searchValue', i) as string;
+						const customFieldName = searchBy === 'customField' 
+							? this.getNodeParameter('customFieldName', i) as string 
+							: undefined;
 
-						const result = await getCompanyIntelligence.call(this, companyId);
+						const result = await findCompanyUnified.call(
+							this, 
+							searchBy, 
+							searchValue, 
+							customFieldName,
+							true
+						);
 						
 						responseData = {
 							found: result.found,
 							company: result.company,
-							intelligence: result.intelligence,
-							recordId: companyId,
+							confidence: result.confidence,
+							recordId: result.company?.id || null,
+							searchMethod: result.searchMethod,
+							searchValue: result.searchValue,
+							totalMatches: result.totalMatches || 0,
 							message: result.found 
-								? `Company intelligence retrieved for: ${result.company?.name}`
-								: `Company not found with ID: ${companyId}`,
+								? `Company found: ${result.company.name}`
+								: `No company found with ${result.searchMethod}: ${result.searchValue}`,
 						};
 						break;
 					}
+
+					case 'listPersonsByCompany': {
+						const companyId = this.getNodeParameter('companyId', i) as string;
+
+						const result = await listPersonsByCompany.call(this, companyId);
+						
+						responseData = {
+							companyId: result.companyId,
+							people: result.people,
+							totalCount: result.totalCount,
+							message: `Found ${result.totalCount} people in company`,
+						};
+						break;
+					}
+
 
 					case 'addContact': {
 						const firstName = this.getNodeParameter('firstName', i) as string;
@@ -606,28 +558,6 @@ export class Twenty implements INodeType {
 						break;
 					}
 
-					case 'syncContactData': {
-						const email = this.getNodeParameter('emailAddress', i) as string;
-						const additionalFields = this.getNodeParameter('additionalFields', i, {}) as any;
-
-						const externalData: IDataObject = {};
-						if (additionalFields.firstName) externalData.firstName = additionalFields.firstName;
-						if (additionalFields.lastName) externalData.lastName = additionalFields.lastName;
-						if (additionalFields.phone) externalData.phone = additionalFields.phone;
-						if (additionalFields.position) externalData.position = additionalFields.position;
-						if (additionalFields.city) externalData.city = additionalFields.city;
-
-						const result = await syncContactData.call(this, email, externalData);
-						
-						responseData = {
-							action: result.action,
-							person: result.person,
-							changes: result.changes,
-							recordId: result.person?.id,
-							message: `Sync complete: ${result.action} (${result.changes.length} changes)`,
-						};
-						break;
-					}
 
 					case 'deleteContactByEmail': {
 						const email = this.getNodeParameter('emailAddress', i) as string;

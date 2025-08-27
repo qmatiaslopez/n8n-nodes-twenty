@@ -950,3 +950,364 @@ function normalizeDomain(domain: string): string | null {
 	
 	return normalized;
 }
+
+// Field resolution system with fallback
+export async function resolveFieldName(
+	this: IExecuteFunctions,
+	objectType: 'person' | 'company',
+	fieldInput: string
+): Promise<{
+	resolvedField: string | null;
+	fieldExists: boolean;
+	triedFields: string[];
+}> {
+	const candidates = [
+		fieldInput,                           // Exact: "instagram"
+		`${fieldInput}Link`,                 // With suffix: "instagramLink"
+		fieldInput.toLowerCase(),            // Lowercase: "Instagram" → "instagram"
+		`${fieldInput.toLowerCase()}Link`    // Lowercase + suffix: "instagramLink"
+	];
+	
+	// Remove duplicates while preserving order
+	const uniqueCandidates = [...new Set(candidates)];
+	
+	try {
+		// Get field metadata for the object
+		const objectName = objectType === 'person' ? 'person' : 'company';
+		const metadata = await twentyApiMetadataRequest.call(
+			this,
+			'GET',
+			`/objects/${objectName}/fields`
+		);
+		
+		if (!metadata?.data) {
+			return {
+				resolvedField: null,
+				fieldExists: false,
+				triedFields: uniqueCandidates
+			};
+		}
+		
+		const availableFields = metadata.data.map((field: any) => field.name);
+		
+		// Try each candidate
+		for (const candidate of uniqueCandidates) {
+			if (availableFields.includes(candidate)) {
+				return {
+					resolvedField: candidate,
+					fieldExists: true,
+					triedFields: uniqueCandidates
+				};
+			}
+		}
+		
+		// No match found
+		return {
+			resolvedField: null,
+			fieldExists: false,
+			triedFields: uniqueCandidates
+		};
+		
+	} catch (error) {
+		throw new NodeOperationError(
+			this.getNode(),
+			`Failed to resolve field name: ${error.message}`
+		);
+	}
+}
+
+// Unified person search function
+export async function findPersonUnified(
+	this: IExecuteFunctions,
+	searchBy: string,
+	searchValue: string,
+	customFieldName?: string,
+	includeRelated: boolean = true
+) {
+	try {
+		let filter: IDataObject = {};
+		
+		switch (searchBy) {
+			case 'email':
+				filter = {
+					or: [
+						{ emails: { primaryEmail: { eq: searchValue.toLowerCase() } } },
+						{ emails: { additionalEmails: { contains: searchValue.toLowerCase() } } }
+					]
+				};
+				break;
+				
+			case 'phone':
+				filter = {
+					or: [
+						{ phones: { primaryPhoneNumber: { eq: searchValue } } },
+						{ phones: { additionalPhoneNumbers: { contains: searchValue } } }
+					]
+				};
+				break;
+				
+			case 'name':
+				filter = {
+					or: [
+						{ name: { firstName: { ilike: `%${searchValue}%` } } },
+						{ name: { lastName: { ilike: `%${searchValue}%` } } }
+					]
+				};
+				break;
+				
+			case 'customField':
+				if (!customFieldName) {
+					throw new NodeOperationError(
+						this.getNode(),
+						'Custom field name is required when searching by custom field'
+					);
+				}
+				
+				// Resolve field name with fallback
+				const fieldResolution = await resolveFieldName.call(this, 'person', customFieldName);
+				
+				if (!fieldResolution.fieldExists) {
+					throw new NodeOperationError(
+						this.getNode(),
+						`Field "${customFieldName}" not found. Tried: ${fieldResolution.triedFields.join(', ')}.`
+					);
+				}
+				
+				const resolvedField = fieldResolution.resolvedField!;
+				
+				// Build filter based on field type
+				if (resolvedField.includes('Link')) {
+					// For link fields (social media, etc.)
+					filter = {
+						[resolvedField]: {
+							primaryLinkUrl: { contains: searchValue }
+						}
+					};
+				} else {
+					// For text fields
+					filter = {
+						[resolvedField]: { contains: searchValue }
+					};
+				}
+				break;
+				
+			default:
+				throw new NodeOperationError(
+					this.getNode(),
+					`Unsupported search method: ${searchBy}`
+				);
+		}
+		
+		const endpoint = '/people';
+		const qs: IDataObject = {
+			filter: JSON.stringify(filter),
+			limit: 50
+		};
+		
+		const response = await twentyApiRequest.call(this, 'GET', endpoint, {}, qs);
+		
+		const people = response.data?.people || [];
+		
+		if (people.length === 0) {
+			return {
+				found: false,
+				person: null,
+				confidence: 0,
+				searchMethod: searchBy,
+				searchValue: searchValue
+			};
+		}
+		
+		// Return first match with confidence score
+		const person = people[0];
+		let confidence = 0.8; // Base confidence for exact matches
+		
+		if (people.length === 1) {
+			confidence = 0.95; // Higher confidence for unique matches
+		}
+		
+		return {
+			found: true,
+			person: person,
+			confidence: confidence,
+			searchMethod: searchBy,
+			searchValue: searchValue,
+			totalMatches: people.length
+		};
+		
+	} catch (error) {
+		if (error instanceof NodeOperationError) {
+			throw error;
+		}
+		throw new NodeOperationError(
+			this.getNode(),
+			`Failed to search person: ${error.message}`
+		);
+	}
+}
+
+// Unified company search function
+export async function findCompanyUnified(
+	this: IExecuteFunctions,
+	searchBy: string,
+	searchValue: string,
+	customFieldName?: string,
+	includeRelated: boolean = true
+) {
+	try {
+		let filter: IDataObject = {};
+		
+		switch (searchBy) {
+			case 'name':
+				filter = {
+					name: { ilike: `%${searchValue}%` }
+				};
+				break;
+				
+			case 'domain':
+				const normalizedDomain = normalizeDomain(searchValue);
+				if (!normalizedDomain) {
+					throw new NodeOperationError(
+						this.getNode(),
+						'Invalid domain format'
+					);
+				}
+				
+				filter = {
+					domainName: {
+						primaryLinkUrl: { contains: normalizedDomain }
+					}
+				};
+				break;
+				
+			case 'customField':
+				if (!customFieldName) {
+					throw new NodeOperationError(
+						this.getNode(),
+						'Custom field name is required when searching by custom field'
+					);
+				}
+				
+				// Resolve field name with fallback
+				const fieldResolution = await resolveFieldName.call(this, 'company', customFieldName);
+				
+				if (!fieldResolution.fieldExists) {
+					throw new NodeOperationError(
+						this.getNode(),
+						`Field "${customFieldName}" not found. Tried: ${fieldResolution.triedFields.join(', ')}.`
+					);
+				}
+				
+				const resolvedField = fieldResolution.resolvedField!;
+				
+				// Build filter based on field type
+				if (resolvedField.includes('Link')) {
+					// For link fields
+					filter = {
+						[resolvedField]: {
+							primaryLinkUrl: { contains: searchValue }
+						}
+					};
+				} else {
+					// For text fields
+					filter = {
+						[resolvedField]: { contains: searchValue }
+					};
+				}
+				break;
+				
+			default:
+				throw new NodeOperationError(
+					this.getNode(),
+					`Unsupported search method: ${searchBy}`
+				);
+		}
+		
+		const endpoint = '/companies';
+		const qs: IDataObject = {
+			filter: JSON.stringify(filter),
+			limit: 50
+		};
+		
+		const response = await twentyApiRequest.call(this, 'GET', endpoint, {}, qs);
+		
+		const companies = response.data?.companies || [];
+		
+		if (companies.length === 0) {
+			return {
+				found: false,
+				company: null,
+				confidence: 0,
+				searchMethod: searchBy,
+				searchValue: searchValue
+			};
+		}
+		
+		// Return first match with confidence score
+		const company = companies[0];
+		let confidence = 0.8; // Base confidence for exact matches
+		
+		if (companies.length === 1) {
+			confidence = 0.95; // Higher confidence for unique matches
+		}
+		
+		return {
+			found: true,
+			company: company,
+			confidence: confidence,
+			searchMethod: searchBy,
+			searchValue: searchValue,
+			totalMatches: companies.length
+		};
+		
+	} catch (error) {
+		if (error instanceof NodeOperationError) {
+			throw error;
+		}
+		throw new NodeOperationError(
+			this.getNode(),
+			`Failed to search company: ${error.message}`
+		);
+	}
+}
+
+// List people by company
+export async function listPersonsByCompany(
+	this: IExecuteFunctions,
+	companyId: string
+) {
+	try {
+		if (!isValidTwentyUuid(companyId)) {
+			throw new NodeOperationError(
+				this.getNode(),
+				'Invalid company ID format. Must be a valid UUID.'
+			);
+		}
+		
+		const filter = {
+			companyId: { eq: companyId }
+		};
+		
+		const endpoint = '/people';
+		const qs: IDataObject = {
+			filter: JSON.stringify(filter),
+			limit: 100 // Allow more results for company listings
+		};
+		
+		const response = await twentyApiRequest.call(this, 'GET', endpoint, {}, qs);
+		
+		const people = response.data?.people || [];
+		
+		return {
+			companyId: companyId,
+			people: people,
+			totalCount: people.length
+		};
+		
+	} catch (error) {
+		throw new NodeOperationError(
+			this.getNode(),
+			`Failed to list people by company: ${error.message}`
+		);
+	}
+}
