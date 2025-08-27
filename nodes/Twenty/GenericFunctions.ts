@@ -679,11 +679,15 @@ export async function findOrCreateContact(
 		const createData = prepareRequestBody({
 			id: generateTwentyUuid(),
 			name: contactData.name || {},
-			emails: contactData.email ? { primaryEmail: contactData.email } : undefined,
-			phone: contactData.phone ? { primaryPhoneNumber: contactData.phone } : undefined,
+			emails: contactData.emails || (contactData.email ? { primaryEmail: contactData.email } : undefined),
+			phones: contactData.phones || (contactData.phone ? { primaryPhoneNumber: contactData.phone } : undefined),
+			jobTitle: contactData.jobTitle,
 			city: contactData.city,
+			avatarUrl: contactData.avatarUrl,
 			position: contactData.position,
 			companyId: contactData.companyId,
+			linkedinLink: contactData.linkedinLink,
+			xLink: contactData.xLink,
 		}, true);
 		
 		const response = await twentyApiRequest.call(this, 'POST', '/people', createData);
@@ -743,10 +747,12 @@ export async function findOrCreateCompany(
 		const createData = prepareRequestBody({
 			id: generateTwentyUuid(),
 			name: companyData.name,
-			domainName: domain ? { primaryLinkUrl: domain.startsWith('http') ? domain : `https://${domain}` } : undefined,
+			domainName: companyData.domainName || (domain ? { primaryLinkUrl: domain.startsWith('http') ? domain : `https://${domain}` } : undefined),
 			address: companyData.address,
 			employees: companyData.employees,
 			annualRecurringRevenue: companyData.annualRecurringRevenue,
+			linkedinLink: companyData.linkedinLink,
+			xLink: companyData.xLink,
 		}, true);
 		
 		const response = await twentyApiRequest.call(this, 'POST', '/companies', createData);
@@ -1025,36 +1031,26 @@ export async function findPersonUnified(
 	includeRelated: boolean = true
 ) {
 	try {
-		let filter: IDataObject = {};
+		
+		const endpoint = '/people';
+		const qs: IDataObject = {
+			limit: 50
+		};
+		
+		// Convert complex filter to REST API format
+		let filterString = '';
 		
 		switch (searchBy) {
 			case 'email':
-				filter = {
-					or: [
-						{ emails: { primaryEmail: { eq: searchValue.toLowerCase() } } },
-						{ emails: { additionalEmails: { contains: searchValue.toLowerCase() } } }
-					]
-				};
+				filterString = `emails.primaryEmail[eq]:"${searchValue.toLowerCase()}"`;
 				break;
-				
 			case 'phone':
-				filter = {
-					or: [
-						{ phones: { primaryPhoneNumber: { eq: searchValue } } },
-						{ phones: { additionalPhoneNumbers: { contains: searchValue } } }
-					]
-				};
+				filterString = `phones.primaryPhoneNumber[eq]:"${searchValue}"`;
 				break;
-				
 			case 'name':
-				filter = {
-					or: [
-						{ name: { firstName: { ilike: `%${searchValue}%` } } },
-						{ name: { lastName: { ilike: `%${searchValue}%` } } }
-					]
-				};
+				// For name searches, use firstName or lastName with ilike
+				filterString = `or(name.firstName[ilike]:"%${searchValue}%",name.lastName[ilike]:"%${searchValue}%")`;
 				break;
-				
 			case 'customField':
 				if (!customFieldName) {
 					throw new NodeOperationError(
@@ -1075,22 +1071,12 @@ export async function findPersonUnified(
 				
 				const resolvedField = fieldResolution.resolvedField!;
 				
-				// Build filter based on field type
 				if (resolvedField.includes('Link')) {
-					// For link fields (social media, etc.)
-					filter = {
-						[resolvedField]: {
-							primaryLinkUrl: { contains: searchValue }
-						}
-					};
+					filterString = `${resolvedField}.primaryLinkUrl[contains]:"${searchValue}"`;
 				} else {
-					// For text fields
-					filter = {
-						[resolvedField]: { contains: searchValue }
-					};
+					filterString = `${resolvedField}[contains]:"${searchValue}"`;
 				}
 				break;
-				
 			default:
 				throw new NodeOperationError(
 					this.getNode(),
@@ -1098,11 +1084,9 @@ export async function findPersonUnified(
 				);
 		}
 		
-		const endpoint = '/people';
-		const qs: IDataObject = {
-			filter: JSON.stringify(filter),
-			limit: 50
-		};
+		if (filterString) {
+			qs.filter = filterString;
+		}
 		
 		const response = await twentyApiRequest.call(this, 'GET', endpoint, {}, qs);
 		
@@ -1155,13 +1139,18 @@ export async function findCompanyUnified(
 	includeRelated: boolean = true
 ) {
 	try {
-		let filter: IDataObject = {};
+		
+		const endpoint = '/companies';
+		const qs: IDataObject = {
+			limit: 50
+		};
+		
+		// Convert complex filter to REST API format
+		let filterString = '';
 		
 		switch (searchBy) {
 			case 'name':
-				filter = {
-					name: { ilike: `%${searchValue}%` }
-				};
+				filterString = `name[ilike]:"%${searchValue}%"`;
 				break;
 				
 			case 'domain':
@@ -1172,12 +1161,7 @@ export async function findCompanyUnified(
 						'Invalid domain format'
 					);
 				}
-				
-				filter = {
-					domainName: {
-						primaryLinkUrl: { contains: normalizedDomain }
-					}
-				};
+				filterString = `domainName.primaryLinkUrl[contains]:"${normalizedDomain}"`;
 				break;
 				
 			case 'customField':
@@ -1200,19 +1184,10 @@ export async function findCompanyUnified(
 				
 				const resolvedField = fieldResolution.resolvedField!;
 				
-				// Build filter based on field type
 				if (resolvedField.includes('Link')) {
-					// For link fields
-					filter = {
-						[resolvedField]: {
-							primaryLinkUrl: { contains: searchValue }
-						}
-					};
+					filterString = `${resolvedField}.primaryLinkUrl[contains]:"${searchValue}"`;
 				} else {
-					// For text fields
-					filter = {
-						[resolvedField]: { contains: searchValue }
-					};
+					filterString = `${resolvedField}[contains]:"${searchValue}"`;
 				}
 				break;
 				
@@ -1223,11 +1198,9 @@ export async function findCompanyUnified(
 				);
 		}
 		
-		const endpoint = '/companies';
-		const qs: IDataObject = {
-			filter: JSON.stringify(filter),
-			limit: 50
-		};
+		if (filterString) {
+			qs.filter = filterString;
+		}
 		
 		const response = await twentyApiRequest.call(this, 'GET', endpoint, {}, qs);
 		
@@ -1284,13 +1257,9 @@ export async function listPersonsByCompany(
 			);
 		}
 		
-		const filter = {
-			companyId: { eq: companyId }
-		};
-		
 		const endpoint = '/people';
 		const qs: IDataObject = {
-			filter: JSON.stringify(filter),
+			filter: `companyId[eq]:"${companyId}"`,
 			limit: 100 // Allow more results for company listings
 		};
 		
