@@ -44,11 +44,10 @@ export class Twenty implements INodeType {
 				name: 'useCase',
 				type: 'options',
 				options: [
-					// PERSON OPERATIONS
 					{
-						name: 'Find Person',
-						value: 'findPerson',
-						description: 'Search for a person using various criteria',
+						name: 'Create Company',
+						value: 'createCompany',
+						description: 'Create a new company',
 					},
 					{
 						name: 'Create Person',
@@ -56,9 +55,9 @@ export class Twenty implements INodeType {
 						description: 'Create a new person',
 					},
 					{
-						name: 'Update Person',
-						value: 'updatePerson',
-						description: 'Update an existing person',
+						name: 'Delete Company',
+						value: 'deleteCompany',
+						description: 'Delete a company',
 					},
 					{
 						name: 'Delete Person',
@@ -66,20 +65,19 @@ export class Twenty implements INodeType {
 						description: 'Delete a person',
 					},
 					{
-						name: 'List People by Company',
-						value: 'listPersonsByCompany',
-						description: 'List all people associated with a company',
-					},
-					// COMPANY OPERATIONS
-					{
 						name: 'Find Company',
 						value: 'findCompany',
 						description: 'Search for a company using various criteria',
 					},
 					{
-						name: 'Create Company',
-						value: 'createCompany',
-						description: 'Create a new company',
+						name: 'Find Person',
+						value: 'findPerson',
+						description: 'Search for a person using various criteria',
+					},
+					{
+						name: 'List People by Company',
+						value: 'listPersonsByCompany',
+						description: 'List all people associated with a company',
 					},
 					{
 						name: 'Update Company',
@@ -87,9 +85,9 @@ export class Twenty implements INodeType {
 						description: 'Update an existing company',
 					},
 					{
-						name: 'Delete Company',
-						value: 'deleteCompany',
-						description: 'Delete a company',
+						name: 'Update Person',
+						value: 'updatePerson',
+						description: 'Update an existing person',
 					},
 				],
 				default: 'findPerson',
@@ -562,8 +560,8 @@ export class Twenty implements INodeType {
 					case 'deleteContactByEmail': {
 						const email = this.getNodeParameter('emailAddress', i) as string;
 
-						// First find the contact
-						const findResult = await findPersonByEmail.call(this, email, false);
+						// First find the contact using unified search
+						const findResult = await findPersonUnified.call(this, 'email', email, undefined, false);
 						if (!findResult.found) {
 							responseData = {
 								deleted: false,
@@ -595,9 +593,9 @@ export class Twenty implements INodeType {
 					case 'deleteCompanyByName': {
 						const companyName = this.getNodeParameter('companyName', i) as string;
 
-						// First find the company with exact match
-						const findResult = await findCompanyByName.call(this, companyName, false);
-						if (!findResult.found || findResult.confidence < 1.0) {
+						// First find the company using unified search
+						const findResult = await findCompanyUnified.call(this, 'name', companyName, undefined, false);
+						if (!findResult.found || findResult.confidence < 0.9) {
 							responseData = {
 								deleted: false,
 								error: findResult.found 
