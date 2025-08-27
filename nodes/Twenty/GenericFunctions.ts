@@ -1081,7 +1081,7 @@ export async function findPersonUnified(
 				const resolvedField = fieldResolution.resolvedField!;
 				
 				if (resolvedField.includes('Link')) {
-					filterString = `${resolvedField}[eq]:${JSON.stringify({primaryLinkUrl: searchValue})}`;
+					filterString = `${resolvedField}.primaryLinkUrl[eq]:"${searchValue}"`;
 				} else {
 					filterString = `${resolvedField}[contains]:"${searchValue}"`;
 				}
@@ -1170,7 +1170,7 @@ export async function findCompanyUnified(
 						'Invalid domain format'
 					);
 				}
-				filterString = `domainName[eq]:${JSON.stringify({primaryLinkUrl: normalizedDomain})}`;
+				filterString = `domainName.primaryLinkUrl[eq]:"${normalizedDomain}"`;
 				break;
 				
 			case 'customField':
@@ -1194,7 +1194,7 @@ export async function findCompanyUnified(
 				const resolvedField = fieldResolution.resolvedField!;
 				
 				if (resolvedField.includes('Link')) {
-					filterString = `${resolvedField}[eq]:${JSON.stringify({primaryLinkUrl: searchValue})}`;
+					filterString = `${resolvedField}.primaryLinkUrl[eq]:"${searchValue}"`;
 				} else {
 					filterString = `${resolvedField}[contains]:"${searchValue}"`;
 				}
