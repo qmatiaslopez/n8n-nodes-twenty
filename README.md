@@ -6,23 +6,23 @@ This is an n8n community node. It lets you use **Twenty CRM** in your n8n workfl
 
 [Twenty CRM](https://twenty.com/) is an open-source CRM (customer relationship management) tool that is under rapid development. This fork is specifically compatible with **Twenty v1.4.0 and later** - it will NOT work with earlier versions.
 
-## 🔄 Fork Highlights
+## Fork Highlights
 
-- ✅ **Twenty v1.4.0+ Compatible**: Updated API endpoints from `/rest/*` to `/rest/core/*`
-- ✅ **Metadata API Support**: Access to `/rest/metadata/*` endpoints
-- ✅ **Enhanced Filtering**: Advanced operators (`and`, `or`, `not`)
-- ✅ **Improved Pagination**: Cursor-based with `starting_after`, `ending_before`
-- ❌ **Breaking Change**: NOT compatible with Twenty versions < v1.4.0
+- **Twenty v1.4.0+ Compatible**: Updated API endpoints from `/rest/*` to `/rest/core/*`
+- **Metadata API Support**: Access to `/rest/metadata/*` endpoints
+- **Enhanced Filtering**: Advanced operators (`and`, `or`, `not`)
+- **Improved Pagination**: Cursor-based with `starting_after`, `ending_before`
+- **Breaking Change**: NOT compatible with Twenty versions < v1.4.0
 
-### 📋 Original vs Fork
+### Original vs Fork
 
 | Feature | Original (v0.0.5) | This Fork (v0.1.0) |
 |---------|-------------------|---------------------|
 | Twenty Compatibility | v1.0.3 | v1.4.0+ |
 | API Endpoints | `/rest/*` | `/rest/core/*` |
-| Metadata API | ❌ | ✅ |
+| Metadata API | No | Yes |
 | Advanced Filtering | Basic | Enhanced |
-| Cursor Pagination | ❌ | ✅ |
+| Cursor Pagination | No | Yes |
 
 [n8n](https://n8n.io/) is a [fair-code licensed](https://docs.n8n.io/reference/license/) workflow automation platform.
 
@@ -142,7 +142,7 @@ Compatible with Twenty's updated API in v0.33.4
 #### v0.0.1
 Initial release
 
-## 👏 Credits & Attribution
+## Credits & Attribution
 
 ### Original Work
 - **S Hodgson** - Original creator of [n8n-nodes-twenty](https://github.com/shodgson/n8n-nodes-twenty)

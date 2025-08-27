@@ -1,0 +1,961 @@
+import {
+	IExecuteFunctions,
+	INodeExecutionData,
+	INodeType,
+	INodeTypeDescription,
+	ILoadOptionsFunctions,
+	INodePropertyOptions,
+	NodeOperationError,
+	IDataObject,
+} from 'n8n-workflow';
+
+import {
+	twentyApiRequest,
+	findPersonByEmail,
+	findCompanyByName,
+	findCompanyByDomain,
+	getPersonFullProfile,
+	getCompanyIntelligence,
+	findOrCreateContact,
+	findOrCreateCompany,
+	updateContactByEmail,
+	updateCompanyByName,
+	syncContactData,
+} from './GenericFunctions';
+
+export class Twenty implements INodeType {
+	description: INodeTypeDescription = {
+		displayName: 'Twenty CRM',
+		name: 'twenty',
+		icon: 'file:twenty.svg',
+		group: ['transform'],
+		version: 1,
+		subtitle: '={{$parameter["useCase"]}}',
+		description: 'Interact with Twenty CRM - Smart CRM operations with intuitive workflow',
+		defaults: {
+			name: 'Twenty CRM',
+		},
+		inputs: ['main'],
+		outputs: ['main'],
+		credentials: [
+			{
+				name: 'twentyApi',
+				required: true,
+			},
+		],
+		requestDefaults: {
+			headers: {
+				Accept: 'application/json',
+				'Content-Type': 'application/json',
+			},
+			baseURL: '={{$credentials.domain}}/rest',
+		},
+		properties: [
+			{
+				displayName: 'What do you want to do?',
+				name: 'useCase',
+				type: 'options',
+				noDataExpression: true,
+				options: [
+					{
+						name: 'Find Contact by Email',
+						value: 'findContactByEmail',
+						description: 'Search for a person using their email address',
+						action: 'Find contact by email',
+					},
+					{
+						name: 'Find Company by Name',
+						value: 'findCompanyByName',
+						description: 'Search for a company using its name',
+						action: 'Find company by name',
+					},
+					{
+						name: 'Find Company by Domain',
+						value: 'findCompanyByDomain',
+						description: 'Search for a company using its website domain',
+						action: 'Find company by domain',
+					},
+					{
+						name: 'Get Full Contact Profile',
+						value: 'getFullProfile',
+						description: 'Get complete contact info including company and relationships',
+						action: 'Get full contact profile',
+					},
+					{
+						name: 'Get Company Intelligence',
+						value: 'getCompanyIntel',
+						description: 'Get company info with all employees and opportunities',
+						action: 'Get company intelligence',
+					},
+					{
+						name: 'Add New Contact',
+						value: 'addContact',
+						description: 'Create a new person in your CRM',
+						action: 'Add new contact',
+					},
+					{
+						name: 'Add New Company',
+						value: 'addCompany',
+						description: 'Create a new company in your CRM',
+						action: 'Add new company',
+					},
+					{
+						name: 'Find or Create Contact',
+						value: 'findOrCreateContact',
+						description: 'Search for contact by email, create if not found',
+						action: 'Find or create contact',
+					},
+					{
+						name: 'Find or Create Company',
+						value: 'findOrCreateCompany',
+						description: 'Search for company by name, create if not found',
+						action: 'Find or create company',
+					},
+					{
+						name: 'Update Contact by Email',
+						value: 'updateContactByEmail',
+						description: 'Update a person using their email as identifier',
+						action: 'Update contact by email',
+					},
+					{
+						name: 'Update Company by Name',
+						value: 'updateCompanyByName',
+						description: 'Update a company using its name as identifier',
+						action: 'Update company by name',
+					},
+					{
+						name: 'Sync Contact Data',
+						value: 'syncContactData',
+						description: 'Smart sync that updates or creates as needed',
+						action: 'Sync contact data',
+					},
+					{
+						name: 'Delete Contact by Email',
+						value: 'deleteContactByEmail',
+						description: 'Delete a person using their email as identifier',
+						action: 'Delete contact by email',
+					},
+					{
+						name: 'Delete Company by Name',
+						value: 'deleteCompanyByName',
+						description: 'Delete a company using its name as identifier',
+						action: 'Delete company by name',
+					},
+				],
+				default: 'findContactByEmail',
+			},
+
+			// === SEARCH FIELDS ===
+			{
+				displayName: 'Email Address',
+				name: 'emailAddress',
+				type: 'string',
+				placeholder: 'user@example.com',
+				displayOptions: {
+					show: {
+						useCase: ['findContactByEmail', 'updateContactByEmail', 'deleteContactByEmail', 'findOrCreateContact', 'syncContactData'],
+					},
+				},
+				default: '',
+				description: 'Email address to search for',
+				required: true,
+			},
+			{
+				displayName: 'Company Name',
+				name: 'searchCompanyName',
+				type: 'string',
+				displayOptions: {
+					show: {
+						useCase: ['findCompanyByName', 'updateCompanyByName', 'deleteCompanyByName', 'findOrCreateCompany'],
+					},
+				},
+				default: '',
+				description: 'Company name to search for',
+				required: true,
+			},
+			{
+				displayName: 'Company Domain',
+				name: 'searchDomain',
+				type: 'string',
+				placeholder: 'example.com',
+				displayOptions: {
+					show: {
+						useCase: ['findCompanyByDomain'],
+					},
+				},
+				default: '',
+				description: 'Company website domain to search for (without https://)',
+				required: true,
+			},
+			{
+				displayName: 'Contact Identifier',
+				name: 'contactIdentifier',
+				type: 'string',
+				placeholder: 'email@example.com or UUID',
+				displayOptions: {
+					show: {
+						useCase: ['getFullProfile'],
+					},
+				},
+				default: '',
+				description: 'Email address or UUID of the contact',
+				required: true,
+			},
+			{
+				displayName: 'Company Identifier',
+				name: 'companyIdentifier',
+				type: 'string',
+				placeholder: 'Company Name or UUID',
+				displayOptions: {
+					show: {
+						useCase: ['getCompanyIntel'],
+					},
+				},
+				default: '',
+				description: 'Company name or UUID',
+				required: true,
+			},
+
+			// === CONTACT CREATION FIELDS ===
+			{
+				displayName: 'First Name',
+				name: 'firstName',
+				type: 'string',
+				displayOptions: {
+					show: {
+						useCase: ['addContact', 'findOrCreateContact', 'updateContactByEmail', 'syncContactData'],
+					},
+				},
+				default: '',
+				description: 'First name of the person',
+			},
+			{
+				displayName: 'Last Name',
+				name: 'lastName',
+				type: 'string',
+				displayOptions: {
+					show: {
+						useCase: ['addContact', 'findOrCreateContact', 'updateContactByEmail', 'syncContactData'],
+					},
+				},
+				default: '',
+				description: 'Last name of the person',
+			},
+			{
+				displayName: 'Email',
+				name: 'email',
+				type: 'string',
+				placeholder: 'name@email.com',
+				displayOptions: {
+					show: {
+						useCase: ['addContact'],
+					},
+				},
+				default: '',
+				description: 'Email address of the person',
+			},
+			{
+				displayName: 'Phone',
+				name: 'phone',
+				type: 'string',
+				displayOptions: {
+					show: {
+						useCase: ['addContact', 'findOrCreateContact', 'updateContactByEmail', 'syncContactData'],
+					},
+				},
+				default: '',
+				description: 'Phone number of the person',
+			},
+			{
+				displayName: 'City',
+				name: 'city',
+				type: 'string',
+				displayOptions: {
+					show: {
+						useCase: ['addContact', 'findOrCreateContact', 'updateContactByEmail', 'syncContactData'],
+					},
+				},
+				default: '',
+				description: 'City where the person is located',
+			},
+			{
+				displayName: 'Company (Optional)',
+				name: 'companyName',
+				type: 'string',
+				displayOptions: {
+					show: {
+						useCase: ['addContact', 'findOrCreateContact', 'syncContactData'],
+					},
+				},
+				default: '',
+				description: 'Company name - will be created if it doesn\'t exist. Leave empty if no company association needed.',
+			},
+
+			// === COMPANY CREATION FIELDS ===
+			{
+				displayName: 'Company Name',
+				name: 'newCompanyName',
+				type: 'string',
+				displayOptions: {
+					show: {
+						useCase: ['addCompany', 'findOrCreateCompany', 'updateCompanyByName'],
+					},
+				},
+				default: '',
+				description: 'Name of the company',
+				required: true,
+			},
+			{
+				displayName: 'Domain',
+				name: 'domainName',
+				type: 'string',
+				placeholder: 'example.com',
+				displayOptions: {
+					show: {
+						useCase: ['addCompany', 'findOrCreateCompany', 'updateCompanyByName'],
+					},
+				},
+				default: '',
+				description: 'Company website domain (e.g., example.com)',
+			},
+			{
+				displayName: 'Employee Count',
+				name: 'employees',
+				type: 'number',
+				displayOptions: {
+					show: {
+						useCase: ['addCompany', 'findOrCreateCompany', 'updateCompanyByName'],
+					},
+				},
+				default: 0,
+				description: 'Number of employees in the company',
+			},
+			{
+				displayName: 'Account Owner Email (Optional)',
+				name: 'accountOwnerEmail',
+				type: 'string',
+				placeholder: 'owner@example.com',
+				displayOptions: {
+					show: {
+						useCase: ['addCompany', 'findOrCreateCompany', 'updateCompanyByName'],
+					},
+				},
+				default: '',
+				description: 'Email of the person who should own this company account. Will be looked up automatically.',
+			},
+
+			// === ADVANCED OPTIONS (COLLAPSED BY DEFAULT) ===
+			{
+				displayName: 'Advanced Options',
+				name: 'advancedOptions',
+				type: 'collection',
+				placeholder: 'Add advanced option',
+				default: {},
+				options: [
+					{
+						displayName: 'Include Related Data',
+						name: 'includeRelated',
+						type: 'boolean',
+						default: true,
+						description: 'Whether to include related records (company for person, employees for company, etc.)',
+					},
+					{
+						displayName: 'Create Missing Relations',
+						name: 'createMissingRelations',
+						type: 'boolean',
+						default: true,
+						description: 'Automatically create related records (companies, etc.) if they don\'t exist',
+						displayOptions: {
+							show: {
+								'/useCase': ['findOrCreateContact', 'findOrCreateCompany', 'syncContactData'],
+							},
+						},
+					},
+					{
+						displayName: 'Search Confidence Threshold',
+						name: 'confidenceThreshold',
+						type: 'number',
+						typeOptions: {
+							minValue: 0,
+							maxValue: 1,
+							numberPrecision: 2,
+						},
+						default: 0.8,
+						description: 'Minimum confidence score for fuzzy matches (0-1)',
+						displayOptions: {
+							show: {
+								'/useCase': ['findCompanyByName', 'syncContactData'],
+							},
+						},
+					},
+					{
+						displayName: 'Max Results',
+						name: 'maxResults',
+						type: 'number',
+						typeOptions: {
+							minValue: 1,
+							maxValue: 100,
+						},
+						default: 10,
+						description: 'Maximum number of results to return for searches',
+					},
+				],
+			},
+		],
+	};
+
+	methods = {};  // No longer needed - we handle everything via cases
+
+	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
+		const items = this.getInputData();
+		const returnData: INodeExecutionData[] = [];
+
+		for (let i = 0; i < items.length; i++) {
+			try {
+				const useCase = this.getNodeParameter('useCase', i) as string;
+				let responseData: any;
+
+				switch (useCase) {
+					// === SEARCH OPERATIONS ===
+					case 'findContactByEmail':
+						responseData = await this.findContactByEmail(i);
+						break;
+					case 'findCompanyByName':
+						responseData = await this.findCompanyByName(i);
+						break;
+					case 'findCompanyByDomain':
+						responseData = await this.findCompanyByDomain(i);
+						break;
+					case 'getFullProfile':
+						responseData = await this.getFullProfile(i);
+						break;
+					case 'getCompanyIntel':
+						responseData = await this.getCompanyIntel(i);
+						break;
+
+					// === CREATION OPERATIONS ===
+					case 'addContact':
+						responseData = await this.addContact(i);
+						break;
+					case 'addCompany':
+						responseData = await this.addCompany(i);
+						break;
+					case 'findOrCreateContact':
+						responseData = await this.findOrCreateContact(i);
+						break;
+					case 'findOrCreateCompany':
+						responseData = await this.findOrCreateCompany(i);
+						break;
+
+					// === UPDATE OPERATIONS ===
+					case 'updateContactByEmail':
+						responseData = await this.updateContactByEmail(i);
+						break;
+					case 'updateCompanyByName':
+						responseData = await this.updateCompanyByName(i);
+						break;
+					case 'syncContactData':
+						responseData = await this.syncContactData(i);
+						break;
+
+					// === DELETE OPERATIONS ===
+					case 'deleteContactByEmail':
+						responseData = await this.deleteContactByEmail(i);
+						break;
+					case 'deleteCompanyByName':
+						responseData = await this.deleteCompanyByName(i);
+						break;
+
+					default:
+						throw new NodeOperationError(this.getNode(), `Unknown use case: ${useCase}`);
+				}
+
+				// Standardize output format
+				returnData.push({ json: responseData });
+
+			} catch (error) {
+				if (this.continueOnFail()) {
+					returnData.push({
+						json: { 
+							error: error.message,
+							useCase: this.getNodeParameter('useCase', i),
+							success: false,
+						},
+						error,
+					});
+					continue;
+				}
+				throw error;
+			}
+		}
+
+		return [returnData];
+	}
+
+	// === SEARCH METHOD IMPLEMENTATIONS ===
+	private async findContactByEmail(itemIndex: number): Promise<any> {
+		const email = this.getNodeParameter('emailAddress', itemIndex) as string;
+		const advancedOptions = this.getNodeParameter('advancedOptions', itemIndex, {}) as any;
+		const includeRelated = advancedOptions.includeRelated ?? true;
+		
+		const filter = `emails.primaryEmail[eq]:"${email}"`;
+		const depth = includeRelated ? 1 : 0;
+		
+		const response = await twentyApiRequest.call(this, 'GET', '/people', {}, { filter, depth });
+		const people = response.data?.people || [];
+		
+		if (people.length === 0) {
+			return {
+				found: false,
+				contact: null,
+				message: `No contact found with email: ${email}`,
+				searchEmail: email,
+			};
+		}
+		
+		const contact = people[0];
+		return {
+			found: true,
+			contact,
+			company: contact.company || null,
+			recordId: contact.id,
+			searchEmail: email,
+			message: `Found contact: ${contact.name?.firstName} ${contact.name?.lastName}`,
+		};
+	}
+
+	private async findCompanyByName(itemIndex: number): Promise<any> {
+		const companyName = this.getNodeParameter('searchCompanyName', itemIndex) as string;
+		const advancedOptions = this.getNodeParameter('advancedOptions', itemIndex, {}) as any;
+		const includeRelated = advancedOptions.includeRelated ?? true;
+		
+		const filter = `name[ilike]:"%${companyName}%"`;
+		const depth = includeRelated ? 1 : 0;
+		
+		const response = await twentyApiRequest.call(this, 'GET', '/companies', {}, { filter, depth });
+		const companies = response.data?.companies || [];
+		
+		if (companies.length === 0) {
+			return {
+				found: false,
+				company: null,
+				message: `No company found with name: ${companyName}`,
+				searchName: companyName,
+			};
+		}
+		
+		const company = companies[0];
+		return {
+			found: true,
+			company,
+			people: company.people || [],
+			recordId: company.id,
+			searchName: companyName,
+			confidence: this.calculateNameMatch(companyName, company.name),
+			message: `Found company: ${company.name}`,
+		};
+	}
+
+	private async findCompanyByDomain(itemIndex: number): Promise<any> {
+		const domain = this.getNodeParameter('searchDomain', itemIndex) as string;
+		const advancedOptions = this.getNodeParameter('advancedOptions', itemIndex, {}) as any;
+		const includeRelated = advancedOptions.includeRelated ?? true;
+		
+		const filter = `domainName.primaryLinkUrl[ilike]:"%${domain}%"`;
+		const depth = includeRelated ? 1 : 0;
+		
+		const response = await twentyApiRequest.call(this, 'GET', '/companies', {}, { filter, depth });
+		const companies = response.data?.companies || [];
+		
+		if (companies.length === 0) {
+			return {
+				found: false,
+				company: null,
+				message: `No company found with domain: ${domain}`,
+				searchDomain: domain,
+			};
+		}
+		
+		const company = companies[0];
+		return {
+			found: true,
+			company,
+			people: company.people || [],
+			recordId: company.id,
+			searchDomain: domain,
+			message: `Found company: ${company.name}`,
+		};
+	}
+
+	private async getFullProfile(itemIndex: number): Promise<any> {
+		const identifier = this.getNodeParameter('contactIdentifier', itemIndex) as string;
+		const isEmail = identifier.includes('@');
+		
+		if (isEmail) {
+			// Search by email with full depth
+			const filter = `emails.primaryEmail[eq]:"${identifier}"`;
+			const response = await twentyApiRequest.call(this, 'GET', '/people', {}, { filter, depth: 2 });
+			const people = response.data?.people || [];
+			
+			if (people.length === 0) {
+				return {
+					found: false,
+					profile: null,
+					message: `No contact found with email: ${identifier}`,
+				};
+			}
+			
+			const person = people[0];
+			return this.buildFullProfile(person);
+		} else {
+			// Search by UUID with full depth
+			const response = await twentyApiRequest.call(this, 'GET', `/people/${identifier}`, {}, { depth: 2 });
+			return this.buildFullProfile(response.data?.person);
+		}
+	}
+
+	private async getCompanyIntel(itemIndex: number): Promise<any> {
+		const identifier = this.getNodeParameter('companyIdentifier', itemIndex) as string;
+		const isUUID = identifier.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+		
+		let companyId: string;
+		
+		if (isUUID) {
+			companyId = identifier;
+		} else {
+			// Search company by name first
+			const searchResult = await this.findCompanyByName(itemIndex);
+			if (!searchResult.found) {
+				return searchResult;
+			}
+			companyId = searchResult.recordId;
+		}
+		
+		// Get full company intelligence with parallel requests
+		const [companyResponse, peopleResponse, opportunitiesResponse] = await Promise.all([
+			twentyApiRequest.call(this, 'GET', `/companies/${companyId}`, {}, { depth: 1 }),
+			twentyApiRequest.call(this, 'GET', '/people', {}, { filter: `companyId[eq]:"${companyId}"` }),
+			twentyApiRequest.call(this, 'GET', '/opportunities', {}, { filter: `companyId[eq]:"${companyId}"` }),
+		]);
+		
+		const company = companyResponse.data?.company;
+		const people = peopleResponse.data?.people || [];
+		const opportunities = opportunitiesResponse.data?.opportunities || [];
+		
+		return {
+			found: true,
+			company,
+			people,
+			opportunities,
+			stats: {
+				totalEmployees: people.length,
+				totalOpportunities: opportunities.length,
+				totalOpportunityValue: opportunities.reduce((sum: number, opp: any) => 
+					sum + (opp.amount?.amountMicros || 0), 0) / 1000000, // Convert from micros
+			},
+			recordId: companyId,
+			message: `Company intelligence for: ${company.name}`,
+		};
+	}
+
+	// Creation Operations
+	private async addContact(itemIndex: number): Promise<any> {
+		const firstName = this.getNodeParameter('firstName', itemIndex) as string;
+		const lastName = this.getNodeParameter('lastName', itemIndex, '') as string;
+		const email = this.getNodeParameter('email', itemIndex) as string;
+		const phone = this.getNodeParameter('phone', itemIndex, '') as string;
+		const position = this.getNodeParameter('position', itemIndex, '') as string;
+		const city = this.getNodeParameter('city', itemIndex, '') as string;
+		const companyId = this.getNodeParameter('companyId', itemIndex, '') as string;
+
+		const contactData: IDataObject = {
+			name: { firstName, lastName },
+			email,
+		};
+
+		if (phone) contactData.phone = phone;
+		if (position) contactData.position = position;
+		if (city) contactData.city = city;
+		if (companyId) contactData.companyId = companyId;
+
+		const result = await findOrCreateContact.call(this, contactData);
+		
+		return {
+			created: result.created,
+			action: result.action,
+			person: result.person,
+			confidence: result.confidence,
+			recordId: result.person?.id,
+			message: result.created ? `Contact created: ${firstName} ${lastName}` : `Contact found: ${firstName} ${lastName}`,
+		};
+	}
+
+	private async addCompany(itemIndex: number): Promise<any> {
+		const name = this.getNodeParameter('companyName', itemIndex) as string;
+		const domain = this.getNodeParameter('domain', itemIndex, '') as string;
+		const address = this.getNodeParameter('address', itemIndex, '') as string;
+		const employees = this.getNodeParameter('employees', itemIndex, undefined) as number;
+
+		const companyData: IDataObject = { name };
+		if (domain) companyData.domain = domain;
+		if (address) companyData.address = address;
+		if (employees !== undefined) companyData.employees = employees;
+
+		const result = await findOrCreateCompany.call(this, companyData);
+		
+		return {
+			created: result.created,
+			action: result.action,
+			company: result.company,
+			confidence: result.confidence,
+			recordId: result.company?.id,
+			message: result.created ? `Company created: ${name}` : `Company found: ${name}`,
+		};
+	}
+
+	private async findOrCreateContact(itemIndex: number): Promise<any> {
+		const email = this.getNodeParameter('email', itemIndex) as string;
+		const firstName = this.getNodeParameter('firstName', itemIndex, '') as string;
+		const lastName = this.getNodeParameter('lastName', itemIndex, '') as string;
+		const phone = this.getNodeParameter('phone', itemIndex, '') as string;
+		const position = this.getNodeParameter('position', itemIndex, '') as string;
+		const city = this.getNodeParameter('city', itemIndex, '') as string;
+		const companyId = this.getNodeParameter('companyId', itemIndex, '') as string;
+
+		const contactData: IDataObject = { email };
+		if (firstName || lastName) contactData.name = { firstName, lastName };
+		if (phone) contactData.phone = phone;
+		if (position) contactData.position = position;
+		if (city) contactData.city = city;
+		if (companyId) contactData.companyId = companyId;
+
+		const result = await findOrCreateContact.call(this, contactData);
+		
+		return {
+			action: result.action,
+			person: result.person,
+			confidence: result.confidence,
+			created: result.created,
+			recordId: result.person?.id,
+			message: result.created ? `Contact created for: ${email}` : `Contact found for: ${email}`,
+		};
+	}
+
+	private async findOrCreateCompany(itemIndex: number): Promise<any> {
+		const name = this.getNodeParameter('companyName', itemIndex, '') as string;
+		const domain = this.getNodeParameter('domain', itemIndex, '') as string;
+		const address = this.getNodeParameter('address', itemIndex, '') as string;
+		const employees = this.getNodeParameter('employees', itemIndex, undefined) as number;
+
+		if (!name && !domain) {
+			throw new NodeOperationError(this.getNode(), 'Either company name or domain must be provided');
+		}
+
+		const companyData: IDataObject = {};
+		if (name) companyData.name = name;
+		if (domain) companyData.domain = domain;
+		if (address) companyData.address = address;
+		if (employees !== undefined) companyData.employees = employees;
+
+		const result = await findOrCreateCompany.call(this, companyData);
+		
+		return {
+			action: result.action,
+			company: result.company,
+			confidence: result.confidence,
+			created: result.created,
+			foundBy: result.foundBy || null,
+			recordId: result.company?.id,
+			message: result.created ? `Company created: ${name || domain}` : `Company found: ${name || domain}`,
+		};
+	}
+
+	private async updateContactByEmail(itemIndex: number): Promise<any> {
+		const email = this.getNodeParameter('email', itemIndex) as string;
+		const updateData: IDataObject = {};
+
+		// Get optional update fields
+		const firstName = this.getNodeParameter('firstName', itemIndex, '') as string;
+		const lastName = this.getNodeParameter('lastName', itemIndex, '') as string;
+		const phone = this.getNodeParameter('phone', itemIndex, '') as string;
+		const position = this.getNodeParameter('position', itemIndex, '') as string;
+		const city = this.getNodeParameter('city', itemIndex, '') as string;
+
+		if (firstName || lastName) updateData.name = { firstName, lastName };
+		if (phone) updateData.phone = { primaryPhoneNumber: phone };
+		if (position) updateData.position = position;
+		if (city) updateData.city = city;
+
+		const result = await updateContactByEmail.call(this, email, updateData);
+		
+		return {
+			updated: result.updated,
+			person: result.person,
+			originalPerson: result.originalPerson,
+			error: result.error || null,
+			recordId: result.person?.id,
+			message: result.updated ? `Contact updated: ${email}` : `Update failed: ${result.error}`,
+		};
+	}
+
+	private async updateCompanyByName(itemIndex: number): Promise<any> {
+		const name = this.getNodeParameter('companyName', itemIndex) as string;
+		const updateData: IDataObject = {};
+
+		// Get optional update fields
+		const domain = this.getNodeParameter('domain', itemIndex, '') as string;
+		const address = this.getNodeParameter('address', itemIndex, '') as string;
+		const employees = this.getNodeParameter('employees', itemIndex, undefined) as number;
+
+		if (domain) updateData.domainName = { primaryLinkUrl: domain.startsWith('http') ? domain : `https://${domain}` };
+		if (address) updateData.address = address;
+		if (employees !== undefined) updateData.employees = employees;
+
+		const result = await updateCompanyByName.call(this, name, updateData);
+		
+		return {
+			updated: result.updated,
+			company: result.company,
+			originalCompany: result.originalCompany,
+			confidence: result.confidence || 0,
+			error: result.error || null,
+			recordId: result.company?.id,
+			message: result.updated ? `Company updated: ${name}` : `Update failed: ${result.error}`,
+		};
+	}
+
+	private async syncContactData(itemIndex: number): Promise<any> {
+		const email = this.getNodeParameter('email', itemIndex) as string;
+		const externalData: IDataObject = {};
+
+		// Get external data to sync
+		const firstName = this.getNodeParameter('firstName', itemIndex, '') as string;
+		const lastName = this.getNodeParameter('lastName', itemIndex, '') as string;
+		const phone = this.getNodeParameter('phone', itemIndex, '') as string;
+		const position = this.getNodeParameter('position', itemIndex, '') as string;
+		const city = this.getNodeParameter('city', itemIndex, '') as string;
+
+		if (firstName) externalData.firstName = firstName;
+		if (lastName) externalData.lastName = lastName;
+		if (phone) externalData.phone = phone;
+		if (position) externalData.position = position;
+		if (city) externalData.city = city;
+
+		const result = await syncContactData.call(this, email, externalData);
+		
+		return {
+			action: result.action,
+			person: result.person,
+			changes: result.changes,
+			recordId: result.person?.id,
+			message: `Sync complete: ${result.action} (${result.changes.length} changes)`,
+		};
+	}
+
+	private async deleteContactByEmail(itemIndex: number): Promise<any> {
+		const email = this.getNodeParameter('email', itemIndex) as string;
+
+		// First find the contact
+		const findResult = await findPersonByEmail.call(this, email, false);
+		if (!findResult.found) {
+			return {
+				deleted: false,
+				error: 'Contact not found',
+				message: `Contact not found: ${email}`,
+			};
+		}
+
+		const personId = findResult.person.id;
+
+		try {
+			await twentyApiRequest.call(this, 'DELETE', `/people/${personId}`);
+			return {
+				deleted: true,
+				personId,
+				message: `Contact deleted: ${email}`,
+			};
+		} catch (error) {
+			return {
+				deleted: false,
+				error: error.message,
+				message: `Delete failed: ${error.message}`,
+			};
+		}
+	}
+
+	private async deleteCompanyByName(itemIndex: number): Promise<any> {
+		const name = this.getNodeParameter('companyName', itemIndex) as string;
+
+		// First find the company with high confidence
+		const findResult = await findCompanyByName.call(this, name, false);
+		if (!findResult.found || findResult.confidence < 0.9) {
+			return {
+				deleted: false,
+				error: findResult.found ? 'Low confidence match, delete cancelled' : 'Company not found',
+				message: `Company not found or low confidence: ${name}`,
+			};
+		}
+
+		const companyId = findResult.company.id;
+
+		try {
+			await twentyApiRequest.call(this, 'DELETE', `/companies/${companyId}`);
+			return {
+				deleted: true,
+				companyId,
+				confidence: findResult.confidence,
+				message: `Company deleted: ${name}`,
+			};
+		} catch (error) {
+			return {
+				deleted: false,
+				error: error.message,
+				message: `Delete failed: ${error.message}`,
+			};
+		}
+	}
+
+	// Helper method to build full profile
+	private buildFullProfile(person: any): any {
+		if (!person) {
+			return {
+				found: false,
+				profile: null,
+				message: 'Contact not found',
+			};
+		}
+
+		return {
+			found: true,
+			profile: {
+				person,
+				company: person.company || null,
+				// Add more related data as available
+				opportunities: person.pointOfContactForOpportunities || [],
+				tasks: person.assignedTasks || [],
+				notes: person.authoredNotes || [],
+			},
+			recordId: person.id,
+			message: `Full profile for: ${person.name?.firstName} ${person.name?.lastName}`,
+		};
+	}
+
+	// Helper method to calculate name match confidence
+	private calculateNameMatch(search: string, actual: string): number {
+		if (!search || !actual) return 0;
+		
+		const searchLower = search.toLowerCase().trim();
+		const actualLower = actual.toLowerCase().trim();
+		
+		if (searchLower === actualLower) return 1.0;
+		if (actualLower.includes(searchLower) || searchLower.includes(actualLower)) return 0.8;
+		
+		// Simple character overlap calculation
+		const searchChars = new Set(searchLower.split(''));
+		const actualChars = new Set(actualLower.split(''));
+		const intersection = new Set([...searchChars].filter(x => actualChars.has(x)));
+		const union = new Set([...searchChars, ...actualChars]);
+		
+		return intersection.size / union.size;
+	}
+}

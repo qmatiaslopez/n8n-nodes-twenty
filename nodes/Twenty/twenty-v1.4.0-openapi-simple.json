@@ -13,12 +13,8 @@
 	},
 	"servers": [
 		{
-			"url": "/rest/core",
-			"description": "Twenty Core API"
-		},
-		{
-			"url": "/rest/metadata", 
-			"description": "Twenty Metadata API"
+			"url": "/rest",
+			"description": "Twenty REST API"
 		}
 	],
 	"components": {
