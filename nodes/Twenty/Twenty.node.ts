@@ -17,6 +17,7 @@ import {
 	findPersonUnified,
 	findCompanyUnified,
 	listPersonsByCompany,
+	resolveFieldName,
 } from './GenericFunctions';
 
 export class Twenty implements INodeType {
@@ -204,7 +205,6 @@ export class Twenty implements INodeType {
 				options: [
 					{ name: 'Email', value: 'email' },
 					{ name: 'Phone', value: 'phone' },
-					{ name: 'Name', value: 'name' },
 					{ name: 'Custom Field', value: 'customField' },
 				],
 				displayOptions: {
@@ -213,7 +213,7 @@ export class Twenty implements INodeType {
 					},
 				},
 				default: 'email',
-				description: 'How to search for the person',
+				description: 'How to search for the person (name removed to prevent multiple results)',
 			},
 
 			// Search configuration for delete/update company
@@ -323,6 +323,13 @@ export class Twenty implements INodeType {
 				options: [
 					// Person fields
 					{
+						displayName: 'First Name',
+						name: 'firstName',
+						type: 'string',
+						default: '',
+						description: 'First name of the person',
+					},
+					{
 						displayName: 'Last Name',
 						name: 'lastName',
 						type: 'string',
@@ -382,18 +389,11 @@ export class Twenty implements INodeType {
 						description: 'URL of the person\'s avatar image',
 					},
 					{
-						displayName: 'Position',
-						name: 'position',
-						type: 'number',
-						default: 0,
-						description: 'Position in list ordering',
-					},
-					{
-						displayName: 'Company ID',
-						name: 'companyId',
+						displayName: 'Company Name',
+						name: 'companyName',
 						type: 'string',
 						default: '',
-						description: 'UUID of the company this person belongs to',
+						description: 'Name of the company this person belongs to',
 					},
 					{
 						displayName: 'LinkedIn URL',
@@ -408,6 +408,47 @@ export class Twenty implements INodeType {
 						type: 'string',
 						default: '',
 						description: 'Twitter/X profile URL',
+					},
+				],
+			},
+
+			// Custom field values for person updates
+			{
+				displayName: 'Custom Field Values',
+				name: 'customFields',
+				type: 'fixedCollection',
+				placeholder: 'Add Custom Field',
+				displayOptions: {
+					show: {
+						useCase: ['updatePerson'],
+					},
+				},
+				default: {},
+				typeOptions: {
+					multipleValues: true,
+				},
+				options: [
+					{
+						name: 'customField',
+						displayName: 'Custom Field',
+						values: [
+							{
+								displayName: 'Field Name',
+								name: 'fieldName',
+								type: 'string',
+								default: '',
+								placeholder: 'linkedinLink, xLink, instagramLink, etc.',
+								description: 'Name of the custom field to update',
+							},
+							{
+								displayName: 'Field Value',
+								name: 'fieldValue',
+								type: 'string',
+								default: '',
+								placeholder: 'https://linkedin.com/in/profile',
+								description: 'New value for the custom field',
+							},
+						],
 					},
 				],
 			},
@@ -871,6 +912,7 @@ export class Twenty implements INodeType {
 							? this.getNodeParameter('updateCustomFieldName', i) as string 
 							: undefined;
 						const additionalFields = this.getNodeParameter('additionalFields', i, {}) as any;
+						const customFields = this.getNodeParameter('customFields', i, {}) as any;
 
 						// First find the person using unified search
 						const findResult = await findPersonUnified.call(
@@ -908,18 +950,32 @@ export class Twenty implements INodeType {
 						}
 
 						if (additionalFields.phone || additionalFields.phoneCountryCode || additionalFields.phoneCallingCode) {
+							// Preserve existing phone data and only update provided fields
+							const currentPhones = findResult.person.phones || {};
 							updateData.phones = {
-								primaryPhoneNumber: additionalFields.phone || '',
-								primaryPhoneCountryCode: additionalFields.phoneCountryCode || '',
-								primaryPhoneCallingCode: additionalFields.phoneCallingCode || '',
+								primaryPhoneNumber: additionalFields.phone !== undefined ? additionalFields.phone : (currentPhones.primaryPhoneNumber || ''),
+								primaryPhoneCountryCode: additionalFields.phoneCountryCode !== undefined ? additionalFields.phoneCountryCode : (currentPhones.primaryPhoneCountryCode || ''),
+								primaryPhoneCallingCode: additionalFields.phoneCallingCode !== undefined ? additionalFields.phoneCallingCode : (currentPhones.primaryPhoneCallingCode || ''),
+								additionalPhones: currentPhones.additionalPhones || []
 							};
 						}
 
 						if (additionalFields.jobTitle !== undefined) updateData.jobTitle = additionalFields.jobTitle;
 						if (additionalFields.city !== undefined) updateData.city = additionalFields.city;
 						if (additionalFields.avatarUrl !== undefined) updateData.avatarUrl = additionalFields.avatarUrl;
-						if (additionalFields.position !== undefined) updateData.position = additionalFields.position;
-						if (additionalFields.companyId !== undefined) updateData.companyId = additionalFields.companyId;
+						
+						// Handle company name lookup
+						if (additionalFields.companyName) {
+							const companyResult = await findCompanyUnified.call(this, 'name', additionalFields.companyName, undefined, false);
+							if (companyResult.found) {
+								updateData.companyId = companyResult.company.id;
+							} else {
+								throw new NodeOperationError(
+									this.getNode(),
+									`Company not found: ${additionalFields.companyName}`
+								);
+							}
+						}
 
 						if (additionalFields.linkedinUrl) {
 							updateData.linkedinLink = { primaryLinkUrl: additionalFields.linkedinUrl };
@@ -927,6 +983,33 @@ export class Twenty implements INodeType {
 						
 						if (additionalFields.xUrl) {
 							updateData.xLink = { primaryLinkUrl: additionalFields.xUrl };
+						}
+
+						// Handle custom field values
+						if (customFields.customField && Array.isArray(customFields.customField)) {
+							for (const field of customFields.customField) {
+								if (field.fieldName && field.fieldValue !== undefined) {
+									// Resolve field name with fallback
+									const fieldResolution = await resolveFieldName.call(this, 'person', field.fieldName);
+									
+									if (fieldResolution.fieldExists) {
+										const resolvedField = fieldResolution.resolvedField!;
+										
+										if (resolvedField.includes('Link')) {
+											// For link fields
+											updateData[resolvedField] = { primaryLinkUrl: field.fieldValue };
+										} else {
+											// For text fields
+											updateData[resolvedField] = field.fieldValue;
+										}
+									} else {
+										throw new NodeOperationError(
+											this.getNode(),
+											`Custom field "${field.fieldName}" not found. Tried: ${fieldResolution.triedFields.join(', ')}.`
+										);
+									}
+								}
+							}
 						}
 
 						try {
