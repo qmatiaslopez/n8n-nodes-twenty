@@ -453,6 +453,47 @@ export class Twenty implements INodeType {
 				],
 			},
 
+			// Custom field values for company updates
+			{
+				displayName: 'Custom Field Values',
+				name: 'customFields',
+				type: 'fixedCollection',
+				placeholder: 'Add Custom Field',
+				displayOptions: {
+					show: {
+						useCase: ['updateCompany'],
+					},
+				},
+				default: {},
+				typeOptions: {
+					multipleValues: true,
+				},
+				options: [
+					{
+						name: 'customField',
+						displayName: 'Custom Field',
+						values: [
+							{
+								displayName: 'Field Name',
+								name: 'fieldName',
+								type: 'string',
+								default: '',
+								placeholder: 'linkedinLink, xLink, instagramLink, etc.',
+								description: 'Name of the custom field to update',
+							},
+							{
+								displayName: 'Field Value',
+								name: 'fieldValue',
+								type: 'string',
+								default: '',
+								placeholder: 'https://linkedin.com/in/company',
+								description: 'New value for the custom field',
+							},
+						],
+					},
+				],
+			},
+
 			// Additional fields for company operations
 			{
 				displayName: 'Additional Fields',
@@ -472,6 +513,13 @@ export class Twenty implements INodeType {
 				},
 				default: {},
 				options: [
+					{
+						displayName: 'Company Name',
+						name: 'name',
+						type: 'string',
+						default: '',
+						description: 'Name of the company',
+					},
 					{
 						displayName: 'Domain',
 						name: 'domain',
@@ -1072,7 +1120,7 @@ export class Twenty implements INodeType {
 						const companyId = findResult.company.id;
 						const updateData: IDataObject = {};
 
-						if (additionalFields.companyName !== undefined) updateData.name = additionalFields.companyName;
+						if (additionalFields.name !== undefined) updateData.name = additionalFields.name;
 						
 						if (additionalFields.domain) {
 							updateData.domainName = { 
@@ -1112,6 +1160,36 @@ export class Twenty implements INodeType {
 						
 						if (additionalFields.companyXUrl) {
 							updateData.xLink = { primaryLinkUrl: additionalFields.companyXUrl };
+						}
+
+						// Handle custom fields
+						const customFields = this.getNodeParameter('customFields', i, {}) as any;
+						if (customFields && customFields.customField && customFields.customField.length > 0) {
+							for (const field of customFields.customField) {
+								if (field.fieldName && field.fieldValue !== undefined) {
+									// Resolve field name with fallback
+									const fieldResolution = await resolveFieldName.call(this, 'company', field.fieldName);
+									
+									if (fieldResolution.fieldExists || fieldResolution.fallbackUsed) {
+										const resolvedField = fieldResolution.resolvedField!;
+										
+										if (resolvedField.includes('Link')) {
+											// For link fields
+											updateData[resolvedField] = { primaryLinkUrl: field.fieldValue };
+										} else {
+											// For text fields
+											updateData[resolvedField] = field.fieldValue;
+										}
+										
+										// Note: Field validation was skipped if fallback was used
+									} else {
+										throw new NodeOperationError(
+											this.getNode(),
+											`Custom field "${field.fieldName}" not found. Tried: ${fieldResolution.triedFields.join(', ')}.`
+										);
+									}
+								}
+							}
 						}
 
 						try {
