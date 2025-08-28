@@ -2156,7 +2156,7 @@ export async function findWorkspaceMemberByEmailGraphQL(
 
 		const variables = {
 			filter: {
-				name: { eq: email }
+				userEmail: { eq: email }
 			}
 		};
 
@@ -2167,7 +2167,7 @@ export async function findWorkspaceMemberByEmailGraphQL(
 			return {
 				found: false,
 				workspaceMember: null,
-				error: `No workspace member found with email: ${email}`
+				error: `No workspace member found with email: ${email}. Make sure the email exists in the workspace and is correctly spelled.`
 			};
 		}
 
@@ -2180,7 +2180,7 @@ export async function findWorkspaceMemberByEmailGraphQL(
 		return {
 			found: false,
 			workspaceMember: null,
-			error: `Failed to find workspace member: ${error.message}`
+			error: `Failed to find workspace member with email ${email}: ${error.message}`
 		};
 	}
 }

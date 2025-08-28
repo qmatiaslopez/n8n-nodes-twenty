@@ -3,7 +3,6 @@ import {
 	findPersonUnifiedGraphQL,
 	findOrCreateContactGraphQL,
 	deletePersonGraphQL,
-	updateContactByEmailGraphQL,
 	updatePersonUnifiedGraphQL,
 	listPersonsByCompanyGraphQL,
 	findCompanyUnifiedGraphQL,
