@@ -3,19 +3,16 @@ import {
 	IExecuteFunctions,
 	ILoadOptionsFunctions,
 	IRequestOptions,
-	IHttpRequestMethods,
 	NodeApiError,
 	NodeOperationError,
 } from 'n8n-workflow';
 // Simple UUID v4 generator without requiring crypto module
 
-export async function twentyApiRequest(
+// GraphQL Infrastructure Functions
+export async function twentyGraphQLRequest(
 	this: IExecuteFunctions,
-	method: IHttpRequestMethods,
-	endpoint: string,
-	body: IDataObject = {},
-	qs: IDataObject = {},
-	path: string = '/rest',
+	query: string,
+	variables: IDataObject = {},
 ) {
 	const credentials = await this.getCredentials('twentyApi');
 
@@ -23,143 +20,101 @@ export async function twentyApiRequest(
 		throw new NodeOperationError(this.getNode(), 'No credentials returned!');
 	}
 
-	// Validate and prepare request body for UUID fields
-	let processedBody = body;
-	if (Object.keys(body).length > 0) {
-		try {
-			const requireId = method === 'POST'; // CREATE operations need ID
-			processedBody = prepareRequestBody(body, requireId);
-		} catch (error) {
-			throw new NodeOperationError(this.getNode(), `Request validation failed: ${error.message}`);
-		}
-	}
-
-	// Validate UUID in endpoint path if present
-	const uuidMatch = endpoint.match(/\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
-	if (uuidMatch && !isValidTwentyUuid(uuidMatch[1])) {
-		throw new NodeOperationError(
-			this.getNode(), 
-			`Invalid UUID in path: "${uuidMatch[1]}". Must be a valid UUID format.`
-		);
-	}
-
 	const options: IRequestOptions = {
-		method,
-		body: processedBody,
-		qs,
-		uri: `${credentials.domain}${path}${endpoint}`,
+		method: 'POST',
+		body: {
+			query,
+			variables,
+		},
+		uri: `${credentials.domain}/graphql`,
 		json: true,
 	};
 
-	if (!Object.keys(processedBody).length) {
-		delete options.body;
-	}
-
-	if (!Object.keys(qs).length) {
-		delete options.qs;
-	}
-
 	try {
-		return await this.helpers.requestWithAuthentication.call(this, 'twentyApi', options);
+		const response = await this.helpers.requestWithAuthentication.call(this, 'twentyApi', options);
+		
+		// Check for GraphQL errors
+		if (response.errors && response.errors.length > 0) {
+			const errorMessages = response.errors.map((error: any) => error.message).join('; ');
+			throw new NodeOperationError(this.getNode(), `GraphQL Error: ${errorMessages}`);
+		}
+		
+		return response;
 	} catch (error) {
 		// Enhance error messages for better UX
-		let errorMessage = 'Twenty API request failed';
-		if (error.response?.data?.message) {
-			errorMessage = `Twenty API Error: ${error.response.data.message}`;
+		let errorMessage = 'Twenty GraphQL request failed';
+		if (error.response?.data?.errors) {
+			const errorMessages = error.response.data.errors.map((err: any) => err.message).join('; ');
+			errorMessage = `Twenty GraphQL Error: ${errorMessages}`;
 		} else if (error.message) {
-			errorMessage = `Twenty API Error: ${error.message}`;
+			errorMessage = `Twenty GraphQL Error: ${error.message}`;
 		}
 		
 		throw new NodeApiError(this.getNode(), error, { message: errorMessage });
 	}
 }
 
-export async function twentyApiMetadataRequest(
-	this: IExecuteFunctions,
-	method: IHttpRequestMethods,
-	endpoint: string,
-	body: IDataObject = {},
-	qs: IDataObject = {},
-) {
-	const credentials = await this.getCredentials('twentyApi');
-
-	if (credentials === undefined) {
-		throw new NodeOperationError(this.getNode(), 'No credentials returned!');
+export function buildGraphQLQuery(
+	operation: 'query' | 'mutation',
+	operationName: string,
+	fields: string,
+	variables?: { [key: string]: string },
+	filters?: IDataObject,
+): string {
+	let variableDeclarations = '';
+	let operationArgs = '';
+	
+	if (variables) {
+		const varDecls = Object.entries(variables).map(([key, type]) => `$${key}: ${type}`);
+		variableDeclarations = `(${varDecls.join(', ')})`;
+		
+		const varArgs = Object.keys(variables).map(key => `${key}: $${key}`);
+		operationArgs = `(${varArgs.join(', ')})`;
 	}
-
-	const options: IRequestOptions = {
-		method,
-		body,
-		qs,
-		uri: `${credentials.domain}/rest/metadata${endpoint}`,
-		json: true,
-	};
-
-	if (!Object.keys(body).length) {
-		delete options.body;
+	
+	// Handle filters/where clauses
+	if (filters) {
+		const filterArgs = Object.entries(filters).map(([key, value]) => {
+			if (typeof value === 'string') {
+				return `${key}: "${value}"`;
+			}
+			return `${key}: ${JSON.stringify(value)}`;
+		});
+		
+		if (variableDeclarations) {
+			operationArgs = operationArgs.slice(0, -1) + `, ${filterArgs.join(', ')})`;
+		} else {
+			operationArgs = `(${filterArgs.join(', ')})`;
+		}
 	}
-
-	if (!Object.keys(qs).length) {
-		delete options.qs;
-	}
-
-	try {
-		return await this.helpers.requestWithAuthentication.call(this, 'twentyApi', options);
-	} catch (error) {
-		throw new NodeApiError(this.getNode(), error);
-	}
+	
+	return `${operation} ${variableDeclarations} {
+		${operationName}${operationArgs} {
+			${fields}
+		}
+	}`;
 }
 
-// UUID Helper Functions - Using Twenty's exact validation logic
+export function buildGraphQLMutation(
+	mutationName: string,
+	inputType: string,
+	fields: string,
+): string {
+	return `mutation($data: ${inputType}!) {
+		${mutationName}(data: $data) {
+			${fields}
+		}
+	}`;
+}
+
+
+// UUID Helper Functions - Keep for GraphQL operations
 export function isValidTwentyUuid(value: string): boolean {
 	const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 	return uuidRegex.test(value);
 }
 
-export function generateTwentyUuid(): string {
-	// Generate a simple UUID v4 without crypto dependency
-	return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-		const r = Math.random() * 16 | 0;
-		const v = c == 'x' ? r : (r & 0x3 | 0x8);
-		return v.toString(16);
-	});
-}
-
-export function validateAndFormatUuid(value: string | undefined, fieldName: string): string {
-	if (!value) {
-		return generateTwentyUuid();
-	}
-	
-	if (!isValidTwentyUuid(value)) {
-		throw new NodeOperationError(
-			undefined as any,
-			`Invalid UUID format for ${fieldName}: "${value}". Must be a valid UUID (e.g., "123e4567-e89b-12d3-a456-426614174000")`
-		);
-	}
-	
-	return value;
-}
-
-export function prepareRequestBody(body: IDataObject, requireId: boolean = false): IDataObject {
-	const preparedBody: IDataObject = { ...body };
-	
-	if (requireId || preparedBody.id !== undefined) {
-		preparedBody.id = validateAndFormatUuid(preparedBody.id as string, 'id');
-	}
-	
-	// Validate common UUID fields that Twenty uses
-	const uuidFields = ['companyId', 'personId', 'opportunityId', 'accountOwnerId', 'workspaceMemberId', 'authorId'];
-	
-	uuidFields.forEach(field => {
-		if (preparedBody[field] !== undefined) {
-			preparedBody[field] = validateAndFormatUuid(preparedBody[field] as string, field);
-		}
-	});
-	
-	return preparedBody;
-}
-
-// Load Options Methods for Dropdowns  
+// Load Options Methods for Dropdowns - GraphQL
 export async function loadCompanies(this: ILoadOptionsFunctions) {
 	try {
 		const credentials = await this.getCredentials('twentyApi');
@@ -167,15 +122,37 @@ export async function loadCompanies(this: ILoadOptionsFunctions) {
 			throw new NodeOperationError(this.getNode(), 'No credentials returned!');
 		}
 		
+		const query = `
+			query LoadCompanies($first: Int) {
+				companies(first: $first) {
+					edges {
+						node {
+							id
+							name
+						}
+					}
+				}
+			}
+		`;
+
 		const options: IRequestOptions = {
-			method: 'GET',
-			uri: `${credentials.domain}/rest/companies`,
-			qs: { first: 100 },
+			method: 'POST',
+			body: {
+				query,
+				variables: { first: 100 },
+			},
+			uri: `${credentials.domain}/graphql`,
 			json: true,
 		};
 		
 		const response = await this.helpers.requestWithAuthentication.call(this, 'twentyApi', options);
-		const companies = response.data?.companies || [];
+		
+		if (response.errors && response.errors.length > 0) {
+			const errorMessages = response.errors.map((error: any) => error.message).join('; ');
+			throw new NodeOperationError(this.getNode(), `GraphQL Error: ${errorMessages}`);
+		}
+		
+		const companies = response.data?.companies?.edges.map((edge: any) => edge.node) || [];
 		
 		return companies.map((company: any) => ({
 			name: company.name || `Company ${company.id.slice(0, 8)}`,
@@ -193,15 +170,40 @@ export async function loadPeople(this: ILoadOptionsFunctions) {
 			throw new NodeOperationError(this.getNode(), 'No credentials returned!');
 		}
 		
+		const query = `
+			query LoadPeople($first: Int) {
+				people(first: $first) {
+					edges {
+						node {
+							id
+							name {
+								firstName
+								lastName
+							}
+						}
+					}
+				}
+			}
+		`;
+
 		const options: IRequestOptions = {
-			method: 'GET',
-			uri: `${credentials.domain}/rest/people`,
-			qs: { first: 100 },
+			method: 'POST',
+			body: {
+				query,
+				variables: { first: 100 },
+			},
+			uri: `${credentials.domain}/graphql`,
 			json: true,
 		};
 		
 		const response = await this.helpers.requestWithAuthentication.call(this, 'twentyApi', options);
-		const people = response.data?.people || [];
+		
+		if (response.errors && response.errors.length > 0) {
+			const errorMessages = response.errors.map((error: any) => error.message).join('; ');
+			throw new NodeOperationError(this.getNode(), `GraphQL Error: ${errorMessages}`);
+		}
+		
+		const people = response.data?.people?.edges.map((edge: any) => edge.node) || [];
 		
 		return people.map((person: any) => ({
 			name: `${person.name?.firstName || ''} ${person.name?.lastName || ''}`.trim() || `Person ${person.id.slice(0, 8)}`,
@@ -219,15 +221,37 @@ export async function loadOpportunities(this: ILoadOptionsFunctions) {
 			throw new NodeOperationError(this.getNode(), 'No credentials returned!');
 		}
 		
+		const query = `
+			query LoadOpportunities($first: Int) {
+				opportunities(first: $first) {
+					edges {
+						node {
+							id
+							name
+						}
+					}
+				}
+			}
+		`;
+
 		const options: IRequestOptions = {
-			method: 'GET',
-			uri: `${credentials.domain}/rest/opportunities`,
-			qs: { first: 100 },
+			method: 'POST',
+			body: {
+				query,
+				variables: { first: 100 },
+			},
+			uri: `${credentials.domain}/graphql`,
 			json: true,
 		};
 		
 		const response = await this.helpers.requestWithAuthentication.call(this, 'twentyApi', options);
-		const opportunities = response.data?.opportunities || [];
+		
+		if (response.errors && response.errors.length > 0) {
+			const errorMessages = response.errors.map((error: any) => error.message).join('; ');
+			throw new NodeOperationError(this.getNode(), `GraphQL Error: ${errorMessages}`);
+		}
+		
+		const opportunities = response.data?.opportunities?.edges.map((edge: any) => edge.node) || [];
 		
 		return opportunities.map((opportunity: any) => ({
 			name: opportunity.name || `Opportunity ${opportunity.id.slice(0, 8)}`,
@@ -245,15 +269,37 @@ export async function loadNotes(this: ILoadOptionsFunctions) {
 			throw new NodeOperationError(this.getNode(), 'No credentials returned!');
 		}
 		
+		const query = `
+			query LoadNotes($first: Int) {
+				notes(first: $first) {
+					edges {
+						node {
+							id
+							title
+						}
+					}
+				}
+			}
+		`;
+
 		const options: IRequestOptions = {
-			method: 'GET',
-			uri: `${credentials.domain}/rest/notes`,
-			qs: { first: 100 },
+			method: 'POST',
+			body: {
+				query,
+				variables: { first: 100 },
+			},
+			uri: `${credentials.domain}/graphql`,
 			json: true,
 		};
 		
 		const response = await this.helpers.requestWithAuthentication.call(this, 'twentyApi', options);
-		const notes = response.data?.notes || [];
+		
+		if (response.errors && response.errors.length > 0) {
+			const errorMessages = response.errors.map((error: any) => error.message).join('; ');
+			throw new NodeOperationError(this.getNode(), `GraphQL Error: ${errorMessages}`);
+		}
+		
+		const notes = response.data?.notes?.edges.map((edge: any) => edge.node) || [];
 		
 		return notes.map((note: any) => ({
 			name: note.title || `Note ${note.id.slice(0, 8)}`,
@@ -271,15 +317,37 @@ export async function loadTasks(this: ILoadOptionsFunctions) {
 			throw new NodeOperationError(this.getNode(), 'No credentials returned!');
 		}
 		
+		const query = `
+			query LoadTasks($first: Int) {
+				tasks(first: $first) {
+					edges {
+						node {
+							id
+							title
+						}
+					}
+				}
+			}
+		`;
+
 		const options: IRequestOptions = {
-			method: 'GET',
-			uri: `${credentials.domain}/rest/tasks`,
-			qs: { first: 100 },
+			method: 'POST',
+			body: {
+				query,
+				variables: { first: 100 },
+			},
+			uri: `${credentials.domain}/graphql`,
 			json: true,
 		};
 		
 		const response = await this.helpers.requestWithAuthentication.call(this, 'twentyApi', options);
-		const tasks = response.data?.tasks || [];
+		
+		if (response.errors && response.errors.length > 0) {
+			const errorMessages = response.errors.map((error: any) => error.message).join('; ');
+			throw new NodeOperationError(this.getNode(), `GraphQL Error: ${errorMessages}`);
+		}
+		
+		const tasks = response.data?.tasks?.edges.map((edge: any) => edge.node) || [];
 		
 		return tasks.map((task: any) => ({
 			name: task.title || `Task ${task.id.slice(0, 8)}`,
@@ -297,15 +365,36 @@ export async function loadMessageThreads(this: ILoadOptionsFunctions) {
 			throw new NodeOperationError(this.getNode(), 'No credentials returned!');
 		}
 		
+		const query = `
+			query LoadMessageThreads($first: Int) {
+				messageThreads(first: $first) {
+					edges {
+						node {
+							id
+						}
+					}
+				}
+			}
+		`;
+
 		const options: IRequestOptions = {
-			method: 'GET',
-			uri: `${credentials.domain}/rest/messageThreads`,
-			qs: { first: 100 },
+			method: 'POST',
+			body: {
+				query,
+				variables: { first: 100 },
+			},
+			uri: `${credentials.domain}/graphql`,
 			json: true,
 		};
 		
 		const response = await this.helpers.requestWithAuthentication.call(this, 'twentyApi', options);
-		const messageThreads = response.data?.messageThreads || [];
+		
+		if (response.errors && response.errors.length > 0) {
+			const errorMessages = response.errors.map((error: any) => error.message).join('; ');
+			throw new NodeOperationError(this.getNode(), `GraphQL Error: ${errorMessages}`);
+		}
+		
+		const messageThreads = response.data?.messageThreads?.edges.map((edge: any) => edge.node) || [];
 		
 		return messageThreads.map((thread: any) => ({
 			name: `Thread ${thread.id.slice(0, 8)}`,
@@ -316,355 +405,23 @@ export async function loadMessageThreads(this: ILoadOptionsFunctions) {
 	}
 }
 
-// Smart Search Functions for use case oriented operations
+// Smart Search Functions - REST versions removed, use GraphQL equivalents
 
-export async function findPersonByEmail(
-	this: IExecuteFunctions,
-	email: string,
-	includeCompany: boolean = true
-) {
-	try {
-		// Validate email format first
-		if (!isValidEmail(email)) {
-			return {
-				found: false,
-				person: null,
-				confidence: 0,
-				error: 'Invalid email format',
-			};
-		}
 
-		// Use correct Twenty CRM GraphQL filter syntax
-		const qs: IDataObject = {
-			filter: { 
-				emails: { 
-					primaryEmail: { 
-						eq: email.toLowerCase().trim() 
-					} 
-				} 
-			},
-		};
-		
-		if (includeCompany) {
-			qs.depth = 1;
-		}
-		
-		const response = await twentyApiRequest.call(this, 'GET', '/people', {}, qs);
-		const people = response.data?.people || [];
-		
-		if (people.length === 0) {
-			return {
-				found: false,
-				person: null,
-				confidence: 0,
-			};
-		}
-		
-		// Verify exact match (double-check the result)
-		const exactMatch = people.find((person: any) => 
-			person.emails?.primaryEmail?.toLowerCase().trim() === email.toLowerCase().trim()
-		);
-		
-		if (!exactMatch) {
-			return {
-				found: false,
-				person: null,
-				confidence: 0,
-			};
-		}
-		
-		return {
-			found: true,
-			person: exactMatch,
-			confidence: 1.0,
-		};
-	} catch (error) {
-		throw new NodeOperationError(
-			this.getNode(),
-			`Failed to find person by email: ${error.message}`
-		);
-	}
-}
 
-export async function findCompanyByName(
-	this: IExecuteFunctions,
-	name: string,
-	includePeople: boolean = true
-) {
-	try {
-		// Validate input
-		const trimmedName = name?.trim();
-		if (!trimmedName) {
-			return {
-				found: false,
-				company: null,
-				confidence: 0,
-				error: 'Company name cannot be empty',
-			};
-		}
 
-		// Try exact match first (case-insensitive)
-		let qs: IDataObject = {
-			filter: { 
-				name: { 
-					eq: trimmedName 
-				} 
-			},
-		};
-		
-		if (includePeople) {
-			qs.depth = 1;
-		}
-		
-		let response = await twentyApiRequest.call(this, 'GET', '/companies', {}, qs);
-		let companies = response.data?.companies || [];
-		
-		// If no exact match, try case-insensitive exact match
-		if (companies.length === 0) {
-			qs = {
-				filter: { 
-					name: { 
-						ilike: trimmedName  // Exact match without wildcards
-					} 
-				},
-			};
-			
-			if (includePeople) {
-				qs.depth = 1;
-			}
-			
-			response = await twentyApiRequest.call(this, 'GET', '/companies', {}, qs);
-			companies = response.data?.companies || [];
-		}
-		
-		if (companies.length === 0) {
-			return {
-				found: false,
-				company: null,
-				confidence: 0,
-			};
-		}
-		
-		// Find exact match (double-check the result)
-		const exactMatch = companies.find((company: any) => 
-			company.name?.toLowerCase().trim() === trimmedName.toLowerCase()
-		);
-		
-		if (!exactMatch) {
-			return {
-				found: false,
-				company: null,
-				confidence: 0,
-			};
-		}
-		
-		return {
-			found: true,
-			company: exactMatch,
-			confidence: 1.0,
-		};
-	} catch (error) {
-		throw new NodeOperationError(
-			this.getNode(),
-			`Failed to find company by name: ${error.message}`
-		);
-	}
-}
 
-export async function findCompanyByDomain(
-	this: IExecuteFunctions,
-	domain: string,
-	includePeople: boolean = true
-) {
-	try {
-		// Normalize domain
-		const normalizedDomain = normalizeDomain(domain);
-		if (!normalizedDomain) {
-			return {
-				found: false,
-				company: null,
-				confidence: 0,
-				error: 'Invalid domain format',
-			};
-		}
-
-		// Use correct Twenty CRM GraphQL filter syntax for exact match
-		const qs: IDataObject = {
-			filter: { 
-				domainName: { 
-					primaryLinkUrl: { 
-						eq: normalizedDomain 
-					} 
-				} 
-			},
-		};
-		
-		if (includePeople) {
-			qs.depth = 1;
-		}
-		
-		const response = await twentyApiRequest.call(this, 'GET', '/companies', {}, qs);
-		const companies = response.data?.companies || [];
-		
-		if (companies.length === 0) {
-			return {
-				found: false,
-				company: null,
-				confidence: 0,
-			};
-		}
-		
-		// Verify exact match (double-check the result)
-		const exactMatch = companies.find((company: any) => {
-			const companyDomain = normalizeDomain(company.domainName?.primaryLinkUrl || '');
-			return companyDomain === normalizedDomain;
-		});
-		
-		if (!exactMatch) {
-			return {
-				found: false,
-				company: null,
-				confidence: 0,
-			};
-		}
-		
-		return {
-			found: true,
-			company: exactMatch,
-			confidence: 1.0,
-		};
-	} catch (error) {
-		throw new NodeOperationError(
-			this.getNode(),
-			`Failed to find company by domain: ${error.message}`
-		);
-	}
-}
-
-export async function getPersonFullProfile(
-	this: IExecuteFunctions,
-	personId: string
-) {
-	try {
-		const qs: IDataObject = {
-			depth: 2, // Include company and other relationships
-		};
-		
-		const response = await twentyApiRequest.call(this, 'GET', `/people/${personId}`, {}, qs);
-		const person = response.data?.person;
-		
-		if (!person) {
-			return {
-				found: false,
-				person: null,
-			};
-		}
-		
-		return {
-			found: true,
-			person,
-			profile: {
-				basicInfo: {
-					name: person.name,
-					email: person.emails?.primaryEmail,
-					phone: person.phone?.primaryPhoneNumber,
-					city: person.city,
-					position: person.position,
-				},
-				company: person.company ? {
-					name: person.company.name,
-					domain: person.company.domainName?.primaryLinkUrl,
-					address: person.company.address,
-				} : null,
-				relationships: {
-					opportunities: person.opportunities || [],
-					activities: person.activities || [],
-					tasks: person.tasks || [],
-				}
-			}
-		};
-	} catch (error) {
-		throw new NodeOperationError(
-			this.getNode(),
-			`Failed to get person full profile: ${error.message}`
-		);
-	}
-}
-
-export async function getCompanyIntelligence(
-	this: IExecuteFunctions,
-	companyId: string
-) {
-	try {
-		const qs: IDataObject = {
-			depth: 2, // Include people, opportunities, etc.
-		};
-		
-		const response = await twentyApiRequest.call(this, 'GET', `/companies/${companyId}`, {}, qs);
-		const company = response.data?.company;
-		
-		if (!company) {
-			return {
-				found: false,
-				company: null,
-			};
-		}
-		
-		// Build intelligence summary
-		const people = company.people || [];
-		const opportunities = company.opportunities || [];
-		
-		return {
-			found: true,
-			company,
-			intelligence: {
-				basicInfo: {
-					name: company.name,
-					domain: company.domainName?.primaryLinkUrl,
-					address: company.address,
-					employees: company.employees,
-					annualRecurringRevenue: company.annualRecurringRevenue,
-				},
-				teamInfo: {
-					totalPeople: people.length,
-					keyContacts: people.slice(0, 5).map((person: any) => ({
-						name: person.name,
-						email: person.emails?.primaryEmail,
-						position: person.position,
-					})),
-				},
-				salesInfo: {
-					totalOpportunities: opportunities.length,
-					activeOpportunities: opportunities.filter((opp: any) => 
-						opp.stage && !['CLOSED_WON', 'CLOSED_LOST'].includes(opp.stage)
-					).length,
-					totalValue: opportunities.reduce((sum: number, opp: any) => 
-						sum + (opp.amount?.amountMicros || 0), 0
-					) / 1000000, // Convert from micros
-				},
-				lastActivity: company.updatedAt,
-			}
-		};
-	} catch (error) {
-		throw new NodeOperationError(
-			this.getNode(),
-			`Failed to get company intelligence: ${error.message}`
-		);
-	}
-}
-
-// Find or Create Operations - Core workflow patterns
-
-export async function findOrCreateContact(
+// GraphQL equivalent of findOrCreateContact
+export async function findOrCreateContactGraphQL(
 	this: IExecuteFunctions,
 	contactData: IDataObject
 ) {
 	try {
 		const email = contactData.email as string;
 		
-		// First, try to find existing contact
+		// First, try to find existing contact using GraphQL
 		if (email) {
-			const existingResult = await findPersonByEmail.call(this, email, true);
+			const existingResult = await findPersonUnifiedGraphQL.call(this, 'email', email, undefined, true);
 			if (existingResult.found) {
 				return {
 					action: 'found',
@@ -675,22 +432,92 @@ export async function findOrCreateContact(
 			}
 		}
 		
-		// Not found, create new contact
-		const createData = prepareRequestBody({
-			id: generateTwentyUuid(),
-			name: contactData.name || {},
-			emails: contactData.emails || (contactData.email ? { primaryEmail: contactData.email } : undefined),
-			phones: contactData.phones || (contactData.phone ? { primaryPhoneNumber: contactData.phone } : undefined),
-			jobTitle: contactData.jobTitle,
-			city: contactData.city,
-			avatarUrl: contactData.avatarUrl,
-			position: contactData.position,
-			companyId: contactData.companyId,
-			linkedinLink: contactData.linkedinLink,
-			xLink: contactData.xLink,
-		}, true);
+		// Not found, create new contact using GraphQL mutation
+		const createData: IDataObject = {};
 		
-		const response = await twentyApiRequest.call(this, 'POST', '/people', createData);
+		// Build the input data structure for GraphQL mutation
+		if (contactData.name || contactData.firstName || contactData.lastName) {
+			const nameData = contactData.name as IDataObject;
+			createData.name = {
+				firstName: contactData.firstName || nameData?.firstName || '',
+				lastName: contactData.lastName || nameData?.lastName || ''
+			};
+		}
+		
+		if (contactData.email || contactData.emails) {
+			const emailsData = contactData.emails as IDataObject;
+			createData.emails = {
+				primaryEmail: contactData.email || emailsData?.primaryEmail
+			};
+		}
+		
+		if (contactData.phone || contactData.phones) {
+			const phonesData = contactData.phones as IDataObject;
+			createData.phones = {
+				primaryPhoneNumber: contactData.phone || phonesData?.primaryPhoneNumber || '',
+				primaryPhoneCountryCode: contactData.phoneCountryCode || phonesData?.primaryPhoneCountryCode || '',
+				primaryPhoneCallingCode: contactData.phoneCallingCode || phonesData?.primaryPhoneCallingCode || ''
+			};
+		}
+		
+		if (contactData.jobTitle) createData.jobTitle = contactData.jobTitle;
+		if (contactData.city) createData.city = contactData.city;
+		if (contactData.avatarUrl) createData.avatarUrl = contactData.avatarUrl;
+		if (contactData.position) createData.position = contactData.position;
+		if (contactData.companyId) createData.companyId = contactData.companyId;
+		
+		if (contactData.linkedinUrl || contactData.linkedinLink) {
+			const linkedinData = contactData.linkedinLink as IDataObject;
+			createData.linkedinLink = {
+				primaryLinkUrl: contactData.linkedinUrl || linkedinData?.primaryLinkUrl
+			};
+		}
+		
+		if (contactData.xUrl || contactData.xLink) {
+			const xData = contactData.xLink as IDataObject;
+			createData.xLink = {
+				primaryLinkUrl: contactData.xUrl || xData?.primaryLinkUrl
+			};
+		}
+		
+		// GraphQL mutation to create person
+		const mutation = `
+			mutation CreatePerson($data: PersonCreateInput!) {
+				createPerson(data: $data) {
+					id
+					name {
+						firstName
+						lastName
+					}
+					emails {
+						primaryEmail
+					}
+					phones {
+						primaryPhoneNumber
+						primaryPhoneCountryCode
+						primaryPhoneCallingCode
+					}
+					jobTitle
+					city
+					avatarUrl
+					linkedinLink {
+						primaryLinkUrl
+					}
+					xLink {
+						primaryLinkUrl
+					}
+					company {
+						id
+						name
+						domainName {
+							primaryLinkUrl
+						}
+					}
+				}
+			}
+		`;
+		
+		const response = await twentyGraphQLRequest.call(this, mutation, { data: createData });
 		const newPerson = response.data?.createPerson;
 		
 		return {
@@ -707,7 +534,9 @@ export async function findOrCreateContact(
 	}
 }
 
-export async function findOrCreateCompany(
+
+// GraphQL equivalent of findOrCreateCompany
+export async function findOrCreateCompanyGraphQL(
 	this: IExecuteFunctions,
 	companyData: IDataObject
 ) {
@@ -715,23 +544,9 @@ export async function findOrCreateCompany(
 		const name = companyData.name as string;
 		const domain = companyData.domain as string;
 		
-		// First, try to find existing company by domain (more reliable)
-		if (domain) {
-			const existingByDomain = await findCompanyByDomain.call(this, domain, false);
-			if (existingByDomain.found && existingByDomain.confidence >= 1.0) {
-				return {
-					action: 'found',
-					company: existingByDomain.company,
-					confidence: existingByDomain.confidence,
-					created: false,
-					foundBy: 'domain',
-				};
-			}
-		}
-		
-		// If not found by domain, try by name
+		// First, try to find existing company by name using GraphQL
 		if (name) {
-			const existingByName = await findCompanyByName.call(this, name, false);
+			const existingByName = await findCompanyUnifiedGraphQL.call(this, 'name', name, undefined, false);
 			if (existingByName.found && existingByName.confidence >= 1.0) {
 				return {
 					action: 'found',
@@ -743,19 +558,101 @@ export async function findOrCreateCompany(
 			}
 		}
 		
-		// Not found, create new company
-		const createData = prepareRequestBody({
-			id: generateTwentyUuid(),
-			name: companyData.name,
-			domainName: companyData.domainName || (domain ? { primaryLinkUrl: domain.startsWith('http') ? domain : `https://${domain}` } : undefined),
-			address: companyData.address,
-			employees: companyData.employees,
-			annualRecurringRevenue: companyData.annualRecurringRevenue,
-			linkedinLink: companyData.linkedinLink,
-			xLink: companyData.xLink,
-		}, true);
+		// Not found, create new company using GraphQL mutation
+		const createData: IDataObject = {};
 		
-		const response = await twentyApiRequest.call(this, 'POST', '/companies', createData);
+		if (companyData.name) createData.name = companyData.name;
+		
+		if (domain || companyData.domainName) {
+			const domainData = companyData.domainName as IDataObject;
+			const domainUrl = domain || domainData?.primaryLinkUrl;
+			if (domainUrl) {
+				createData.domainName = {
+					primaryLinkUrl: (domainUrl as string).startsWith('http') ? domainUrl : `https://${domainUrl}`
+				};
+			}
+		}
+		
+		if (companyData.employees !== undefined) createData.employees = companyData.employees;
+		
+		// Handle address
+		if (companyData.address || companyData.addressStreet1 || companyData.addressCity || 
+			companyData.addressPostcode || companyData.addressState || companyData.addressCountry) {
+			const addressData = companyData.address as IDataObject;
+			createData.address = {
+				addressStreet1: companyData.addressStreet1 || addressData?.addressStreet1 || '',
+				addressStreet2: companyData.addressStreet2 || addressData?.addressStreet2 || '',
+				addressCity: companyData.addressCity || addressData?.addressCity || '',
+				addressPostcode: companyData.addressPostcode || addressData?.addressPostcode || '',
+				addressState: companyData.addressState || addressData?.addressState || '',
+				addressCountry: companyData.addressCountry || addressData?.addressCountry || '',
+			};
+		}
+		
+		// Handle revenue
+		if (companyData.annualRecurringRevenue || companyData.annualRecurringRevenueMicros || companyData.currencyCode) {
+			const revenueData = companyData.annualRecurringRevenue as IDataObject;
+			createData.annualRecurringRevenue = {
+				amountMicros: companyData.annualRecurringRevenueMicros || revenueData?.amountMicros || 0,
+				currencyCode: companyData.currencyCode || revenueData?.currencyCode || 'USD',
+			};
+		}
+		
+		if (companyData.companyLinkedinUrl || companyData.linkedinLink) {
+			const linkedinData = companyData.linkedinLink as IDataObject;
+			createData.linkedinLink = {
+				primaryLinkUrl: companyData.companyLinkedinUrl || linkedinData?.primaryLinkUrl
+			};
+		}
+		
+		if (companyData.companyXUrl || companyData.xLink) {
+			const xData = companyData.xLink as IDataObject;
+			createData.xLink = {
+				primaryLinkUrl: companyData.companyXUrl || xData?.primaryLinkUrl
+			};
+		}
+		
+		// GraphQL mutation to create company
+		const mutation = `
+			mutation CreateCompany($data: CompanyCreateInput!) {
+				createCompany(data: $data) {
+					id
+					name
+					domainName {
+						primaryLinkUrl
+					}
+					employees
+					address {
+						addressStreet1
+						addressStreet2
+						addressCity
+						addressPostcode
+						addressState
+						addressCountry
+					}
+					annualRecurringRevenue {
+						amountMicros
+						currencyCode
+					}
+					linkedinLink {
+						primaryLinkUrl
+					}
+					xLink {
+						primaryLinkUrl
+					}
+					accountOwnerId
+					accountOwner {
+						id
+						name {
+							firstName
+							lastName
+						}
+					}
+				}
+			}
+		`;
+		
+		const response = await twentyGraphQLRequest.call(this, mutation, { data: createData });
 		const newCompany = response.data?.createCompany;
 		
 		return {
@@ -772,16 +669,16 @@ export async function findOrCreateCompany(
 	}
 }
 
-// Update Operations by Natural Identifiers
 
-export async function updateContactByEmail(
+// GraphQL equivalent of updateContactByEmail
+export async function updateContactByEmailGraphQL(
 	this: IExecuteFunctions,
 	email: string,
 	updateData: IDataObject
 ) {
 	try {
-		// Find the contact first
-		const findResult = await findPersonByEmail.call(this, email, false);
+		// Find the contact first using GraphQL
+		const findResult = await findPersonUnifiedGraphQL.call(this, 'email', email, undefined, false);
 		if (!findResult.found) {
 			return {
 				updated: false,
@@ -791,9 +688,96 @@ export async function updateContactByEmail(
 		}
 		
 		const personId = findResult.person.id;
-		const processedData = prepareRequestBody(updateData);
 		
-		const response = await twentyApiRequest.call(this, 'PUT', `/people/${personId}`, processedData);
+		// Build update data structure for GraphQL
+		const processedData: IDataObject = {};
+		
+		if (updateData.name || updateData.firstName || updateData.lastName) {
+			const updateNameData = updateData.name as IDataObject;
+			const personNameData = findResult.person.name as IDataObject;
+			processedData.name = {
+				firstName: updateData.firstName || updateNameData?.firstName || personNameData?.firstName || '',
+				lastName: updateData.lastName || updateNameData?.lastName || personNameData?.lastName || ''
+			};
+		}
+		
+		if (updateData.emails || updateData.email) {
+			const emailsData = updateData.emails as IDataObject;
+			processedData.emails = {
+				primaryEmail: updateData.email || emailsData?.primaryEmail
+			};
+		}
+		
+		if (updateData.phones || updateData.phone) {
+			const phonesData = updateData.phones as IDataObject;
+			processedData.phones = {
+				primaryPhoneNumber: updateData.phone || phonesData?.primaryPhoneNumber || '',
+				primaryPhoneCountryCode: updateData.phoneCountryCode || phonesData?.primaryPhoneCountryCode || '',
+				primaryPhoneCallingCode: updateData.phoneCallingCode || phonesData?.primaryPhoneCallingCode || ''
+			};
+		}
+		
+		if (updateData.jobTitle !== undefined) processedData.jobTitle = updateData.jobTitle;
+		if (updateData.city !== undefined) processedData.city = updateData.city;
+		if (updateData.avatarUrl !== undefined) processedData.avatarUrl = updateData.avatarUrl;
+		if (updateData.position !== undefined) processedData.position = updateData.position;
+		if (updateData.companyId !== undefined) processedData.companyId = updateData.companyId;
+		
+		if (updateData.linkedinUrl || updateData.linkedinLink) {
+			const linkedinData = updateData.linkedinLink as IDataObject;
+			processedData.linkedinLink = {
+				primaryLinkUrl: updateData.linkedinUrl || linkedinData?.primaryLinkUrl
+			};
+		}
+		
+		if (updateData.xUrl || updateData.xLink) {
+			const xData = updateData.xLink as IDataObject;
+			processedData.xLink = {
+				primaryLinkUrl: updateData.xUrl || xData?.primaryLinkUrl
+			};
+		}
+		
+		// GraphQL mutation to update person
+		const mutation = `
+			mutation UpdatePerson($id: UUID!, $data: PersonUpdateInput!) {
+				updatePerson(id: $id, data: $data) {
+					id
+					name {
+						firstName
+						lastName
+					}
+					emails {
+						primaryEmail
+					}
+					phones {
+						primaryPhoneNumber
+						primaryPhoneCountryCode
+						primaryPhoneCallingCode
+					}
+					jobTitle
+					city
+					avatarUrl
+					linkedinLink {
+						primaryLinkUrl
+					}
+					xLink {
+						primaryLinkUrl
+					}
+					company {
+						id
+						name
+						domainName {
+							primaryLinkUrl
+						}
+					}
+				}
+			}
+		`;
+		
+		const response = await twentyGraphQLRequest.call(this, mutation, { 
+			id: personId, 
+			data: processedData 
+		});
 		const updatedPerson = response.data?.updatePerson;
 		
 		return {
@@ -809,153 +793,8 @@ export async function updateContactByEmail(
 	}
 }
 
-export async function updateCompanyByName(
-	this: IExecuteFunctions,
-	name: string,
-	updateData: IDataObject
-) {
-	try {
-		// Find the company first
-		const findResult = await findCompanyByName.call(this, name, false);
-		if (!findResult.found || findResult.confidence < 1.0) {
-			return {
-				updated: false,
-				error: findResult.found ? 'No exact match found, update cancelled' : 'Company not found',
-				company: null,
-			};
-		}
-		
-		const companyId = findResult.company.id;
-		const processedData = prepareRequestBody(updateData);
-		
-		const response = await twentyApiRequest.call(this, 'PUT', `/companies/${companyId}`, processedData);
-		const updatedCompany = response.data?.updateCompany;
-		
-		return {
-			updated: true,
-			company: updatedCompany,
-			originalCompany: findResult.company,
-			confidence: findResult.confidence,
-		};
-	} catch (error) {
-		throw new NodeOperationError(
-			this.getNode(),
-			`Failed to update company by name: ${error.message}`
-		);
-	}
-}
 
-// Advanced sync operation for keeping data updated
-export async function syncContactData(
-	this: IExecuteFunctions,
-	email: string,
-	externalData: IDataObject
-) {
-	try {
-		// Find existing contact
-		const findResult = await findPersonByEmail.call(this, email, true);
-		
-		if (!findResult.found) {
-			// Create new contact if not found
-			const createResult = await findOrCreateContact.call(this, {
-				email,
-				...externalData,
-			});
-			return {
-				action: 'created',
-				person: createResult.person,
-				changes: Object.keys(externalData),
-			};
-		}
-		
-		// Compare and identify changes
-		const person = findResult.person;
-		const changes: string[] = [];
-		const updateData: IDataObject = {};
-		
-		// Compare basic fields
-		const fieldsToCompare = ['city', 'position'];
-		fieldsToCompare.forEach(field => {
-			if (externalData[field] && externalData[field] !== person[field]) {
-				updateData[field] = externalData[field];
-				changes.push(field);
-			}
-		});
-		
-		// Compare nested fields (name, phone)
-		if (externalData.firstName || externalData.lastName) {
-			const currentFirstName = person.name?.firstName || '';
-			const currentLastName = person.name?.lastName || '';
-			const newFirstName = externalData.firstName as string || currentFirstName;
-			const newLastName = externalData.lastName as string || currentLastName;
-			
-			if (newFirstName !== currentFirstName || newLastName !== currentLastName) {
-				updateData.name = { firstName: newFirstName, lastName: newLastName };
-				changes.push('name');
-			}
-		}
-		
-		if (externalData.phone) {
-			const currentPhone = person.phone?.primaryPhoneNumber || '';
-			if (externalData.phone !== currentPhone) {
-				updateData.phone = { primaryPhoneNumber: externalData.phone };
-				changes.push('phone');
-			}
-		}
-		
-		// If no changes, return current data
-		if (changes.length === 0) {
-			return {
-				action: 'no_changes',
-				person,
-				changes: [],
-			};
-		}
-		
-		// Update with changes
-		const updateResult = await updateContactByEmail.call(this, email, updateData);
-		return {
-			action: 'updated',
-			person: updateResult.person,
-			changes,
-		};
-	} catch (error) {
-		throw new NodeOperationError(
-			this.getNode(),
-			`Failed to sync contact data: ${error.message}`
-		);
-	}
-}
 
-// Input validation functions
-function isValidEmail(email: string): boolean {
-	if (!email || typeof email !== 'string') return false;
-	
-	const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
-	return emailRegex.test(email.trim());
-}
-
-function normalizeDomain(domain: string): string | null {
-	if (!domain || typeof domain !== 'string') return null;
-	
-	let normalized = domain.trim().toLowerCase();
-	
-	// Remove protocol
-	normalized = normalized.replace(/^https?:\/\//, '');
-	
-	// Remove www.
-	normalized = normalized.replace(/^www\./, '');
-	
-	// Remove trailing slash and path
-	normalized = normalized.split('/')[0];
-	
-	// Basic domain validation
-	const domainRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
-	
-	if (!domainRegex.test(normalized)) return null;
-	
-	return normalized;
-}
 
 // Field resolution system with fallback
 export async function resolveFieldName(
@@ -979,17 +818,29 @@ export async function resolveFieldName(
 	const uniqueCandidates = [...new Set(candidates)];
 	
 	try {
-		// Get field metadata for the object
-		const objectName = objectType === 'person' ? 'person' : 'company';
-		const metadata = await twentyApiMetadataRequest.call(
-			this,
-			'GET',
-			`/fields`,
-			{},
-			{ filter: `object.nameSingular[eq]:"${objectName}"` }
-		);
+		// Use GraphQL introspection to get field information
+		const typeName = objectType === 'person' ? 'Person' : 'Company';
+		const introspectionQuery = `
+			query GetTypeFields {
+				__schema {
+					types(names: ["${typeName}"]) {
+						name
+						fields {
+							name
+							type {
+								name
+							}
+						}
+					}
+				}
+			}
+		`;
 		
-		if (!metadata?.data) {
+		const response = await twentyGraphQLRequest.call(this, introspectionQuery);
+		const types = response.data?.__schema?.types || [];
+		const targetType = types.find((type: any) => type.name === typeName);
+		
+		if (!targetType?.fields) {
 			return {
 				resolvedField: null,
 				fieldExists: false,
@@ -997,7 +848,7 @@ export async function resolveFieldName(
 			};
 		}
 		
-		const availableFields = metadata.data.map((field: any) => field.name);
+		const availableFields = targetType.fields.map((field: any) => field.name);
 		
 		// Try each candidate
 		for (const candidate of uniqueCandidates) {
@@ -1018,8 +869,7 @@ export async function resolveFieldName(
 		};
 		
 	} catch (error) {
-		// Fallback: try the field name directly if metadata API fails
-		// Use the first candidate (exact field name) as fallback
+		// Fallback: try the field name directly if introspection fails
 		const fallbackField = uniqueCandidates[0];
 		
 		return {
@@ -1031,8 +881,94 @@ export async function resolveFieldName(
 	}
 }
 
-// Unified person search function
-export async function findPersonUnified(
+// GraphQL equivalent of resolveFieldName using introspection
+export async function resolveFieldNameGraphQL(
+	this: IExecuteFunctions,
+	objectType: 'person' | 'company',
+	fieldInput: string
+): Promise<{
+	resolvedField: string | null;
+	fieldExists: boolean;
+	triedFields: string[];
+	fallbackUsed?: boolean;
+}> {
+	const candidates = [
+		fieldInput,                           // Exact: "instagram"
+		`${fieldInput}Link`,                 // With suffix: "instagramLink"
+		fieldInput.toLowerCase(),            // Lowercase: "Instagram" → "instagram"
+		`${fieldInput.toLowerCase()}Link`    // Lowercase + suffix: "instagramLink"
+	];
+	
+	// Remove duplicates while preserving order
+	const uniqueCandidates = [...new Set(candidates)];
+	
+	try {
+		// Use GraphQL introspection to get field information
+		const typeName = objectType === 'person' ? 'Person' : 'Company';
+		const introspectionQuery = `
+			query GetTypeFields {
+				__schema {
+					types(names: ["${typeName}"]) {
+						name
+						fields {
+							name
+							type {
+								name
+							}
+						}
+					}
+				}
+			}
+		`;
+		
+		const response = await twentyGraphQLRequest.call(this, introspectionQuery);
+		const types = response.data?.__schema?.types || [];
+		const targetType = types.find((type: any) => type.name === typeName);
+		
+		if (!targetType?.fields) {
+			return {
+				resolvedField: null,
+				fieldExists: false,
+				triedFields: uniqueCandidates
+			};
+		}
+		
+		const availableFields = targetType.fields.map((field: any) => field.name);
+		
+		// Try each candidate
+		for (const candidate of uniqueCandidates) {
+			if (availableFields.includes(candidate)) {
+				return {
+					resolvedField: candidate,
+					fieldExists: true,
+					triedFields: uniqueCandidates
+				};
+			}
+		}
+		
+		// No match found
+		return {
+			resolvedField: null,
+			fieldExists: false,
+			triedFields: uniqueCandidates
+		};
+		
+	} catch (error) {
+		// Fallback: try the field name directly if introspection fails
+		const fallbackField = uniqueCandidates[0];
+		
+		return {
+			resolvedField: fallbackField,
+			fieldExists: false, // We couldn't validate but we're trying anyway
+			triedFields: uniqueCandidates,
+			fallbackUsed: true
+		};
+	}
+}
+
+
+// GraphQL equivalent of findPersonUnified
+export async function findPersonUnifiedGraphQL(
 	this: IExecuteFunctions,
 	searchBy: string,
 	searchValue: string,
@@ -1040,51 +976,65 @@ export async function findPersonUnified(
 	includeRelated: boolean = true
 ) {
 	try {
+		// Define the fields to fetch
+		const personFields = `
+			id
+			name {
+				firstName
+				lastName
+			}
+			emails {
+				primaryEmail
+			}
+			phones {
+				primaryPhoneNumber
+				primaryPhoneCountryCode
+				primaryPhoneCallingCode
+			}
+			jobTitle
+			city
+			avatarUrl
+			linkedinLink {
+				primaryLinkUrl
+			}
+			xLink {
+				primaryLinkUrl
+			}
+			${includeRelated ? `
+				company {
+					id
+					name
+					domainName {
+						primaryLinkUrl
+					}
+				}
+			` : ''}
+		`;
 		
-		const endpoint = '/people';
-		const qs: IDataObject = {
-			limit: 50
-		};
-		
-		// Convert complex filter to REST API format
-		let filterString = '';
+		// Build GraphQL filter clause based on search criteria
+		let filterClause: IDataObject = {};
 		
 		switch (searchBy) {
 			case 'email':
-				filterString = `emails.primaryEmail[eq]:"${searchValue.toLowerCase()}"`;
+				filterClause = {
+					emails: {
+						primaryEmail: { eq: searchValue.toLowerCase() }
+					}
+				};
 				break;
 			case 'phone':
-				filterString = `phones.primaryPhoneNumber[eq]:"${searchValue}"`;
+				filterClause = {
+					phones: {
+						primaryPhoneNumber: { eq: searchValue }
+					}
+				};
 				break;
-			case 'name':
-				// For name searches, use firstName or lastName with ilike
-				filterString = `or(name.firstName[ilike]:"%${searchValue}%",name.lastName[ilike]:"%${searchValue}%")`;
-				break;
-			case 'customField':
-				if (!customFieldName) {
-					throw new NodeOperationError(
-						this.getNode(),
-						'Custom field name is required when searching by custom field'
-					);
-				}
-				
-				// Resolve field name with fallback
-				const fieldResolution = await resolveFieldName.call(this, 'person', customFieldName);
-				
-				if (!fieldResolution.fieldExists && !fieldResolution.fallbackUsed) {
-					throw new NodeOperationError(
-						this.getNode(),
-						`Field "${customFieldName}" not found. Tried: ${fieldResolution.triedFields.join(', ')}.`
-					);
-				}
-				
-				const resolvedField = fieldResolution.resolvedField!;
-				
-				if (resolvedField.includes('Link')) {
-					filterString = `${resolvedField}.primaryLinkUrl[eq]:"${searchValue}"`;
-				} else {
-					filterString = `${resolvedField}[contains]:"${searchValue}"`;
-				}
+			case 'linkedin':
+				filterClause = {
+					linkedinLink: {
+						primaryLinkUrl: { eq: searchValue }
+					}
+				};
 				break;
 			default:
 				throw new NodeOperationError(
@@ -1093,13 +1043,33 @@ export async function findPersonUnified(
 				);
 		}
 		
-		if (filterString) {
-			qs.filter = filterString;
-		}
+		// Build and execute GraphQL query
+		const query = `
+			query FindPeople($filter: PersonFilterInput, $first: Int) {
+				people(filter: $filter, first: $first) {
+					edges {
+						node {
+							${personFields}
+						}
+					}
+					pageInfo {
+						hasNextPage
+						hasPreviousPage
+						startCursor
+						endCursor
+					}
+				}
+			}
+		`;
 		
-		const response = await twentyApiRequest.call(this, 'GET', endpoint, {}, qs);
+		const variables = {
+			filter: filterClause,
+			first: 50
+		};
 		
-		const people = response.data?.people || [];
+		const response = await twentyGraphQLRequest.call(this, query, variables);
+		const edges = response.data?.people?.edges || [];
+		const people = edges.map((edge: any) => edge.node);
 		
 		if (people.length === 0) {
 			return {
@@ -1139,8 +1109,9 @@ export async function findPersonUnified(
 	}
 }
 
-// Unified company search function
-export async function findCompanyUnified(
+
+// GraphQL equivalent of findCompanyUnified
+export async function findCompanyUnifiedGraphQL(
 	this: IExecuteFunctions,
 	searchBy: string,
 	searchValue: string,
@@ -1148,58 +1119,60 @@ export async function findCompanyUnified(
 	includeRelated: boolean = true
 ) {
 	try {
+		// Define the fields to fetch
+		const companyFields = `
+			id
+			name
+			domainName {
+				primaryLinkUrl
+			}
+			employees
+			address {
+				addressStreet1
+				addressStreet2
+				addressCity
+				addressPostcode
+				addressState
+				addressCountry
+			}
+			annualRecurringRevenue {
+				amountMicros
+				currencyCode
+			}
+			linkedinLink {
+				primaryLinkUrl
+			}
+			xLink {
+				primaryLinkUrl
+			}
+			${includeRelated ? `
+				people {
+					edges {
+						node {
+							id
+							name {
+								firstName
+								lastName
+							}
+							emails {
+								primaryEmail
+							}
+							jobTitle
+						}
+					}
+				}
+			` : ''}
+		`;
 		
-		const endpoint = '/companies';
-		const qs: IDataObject = {
-			limit: 50
-		};
-		
-		// Convert complex filter to REST API format
-		let filterString = '';
+		// Build GraphQL filter clause based on search criteria
+		let filterClause: IDataObject = {};
 		
 		switch (searchBy) {
 			case 'name':
-				filterString = `name[ilike]:"%${searchValue}%"`;
+				filterClause = {
+					name: { ilike: `%${searchValue}%` }
+				};
 				break;
-				
-			case 'domain':
-				const normalizedDomain = normalizeDomain(searchValue);
-				if (!normalizedDomain) {
-					throw new NodeOperationError(
-						this.getNode(),
-						'Invalid domain format'
-					);
-				}
-				filterString = `domainName.primaryLinkUrl[eq]:"${normalizedDomain}"`;
-				break;
-				
-			case 'customField':
-				if (!customFieldName) {
-					throw new NodeOperationError(
-						this.getNode(),
-						'Custom field name is required when searching by custom field'
-					);
-				}
-				
-				// Resolve field name with fallback
-				const fieldResolution = await resolveFieldName.call(this, 'company', customFieldName);
-				
-				if (!fieldResolution.fieldExists && !fieldResolution.fallbackUsed) {
-					throw new NodeOperationError(
-						this.getNode(),
-						`Field "${customFieldName}" not found. Tried: ${fieldResolution.triedFields.join(', ')}.`
-					);
-				}
-				
-				const resolvedField = fieldResolution.resolvedField!;
-				
-				if (resolvedField.includes('Link')) {
-					filterString = `${resolvedField}.primaryLinkUrl[eq]:"${searchValue}"`;
-				} else {
-					filterString = `${resolvedField}[contains]:"${searchValue}"`;
-				}
-				break;
-				
 			default:
 				throw new NodeOperationError(
 					this.getNode(),
@@ -1207,13 +1180,33 @@ export async function findCompanyUnified(
 				);
 		}
 		
-		if (filterString) {
-			qs.filter = filterString;
-		}
+		// Build and execute GraphQL query
+		const query = `
+			query FindCompanies($filter: CompanyFilterInput, $first: Int) {
+				companies(filter: $filter, first: $first) {
+					edges {
+						node {
+							${companyFields}
+						}
+					}
+					pageInfo {
+						hasNextPage
+						hasPreviousPage
+						startCursor
+						endCursor
+					}
+				}
+			}
+		`;
 		
-		const response = await twentyApiRequest.call(this, 'GET', endpoint, {}, qs);
+		const variables = {
+			filter: filterClause,
+			first: 50
+		};
 		
-		const companies = response.data?.companies || [];
+		const response = await twentyGraphQLRequest.call(this, query, variables);
+		const edges = response.data?.companies?.edges || [];
+		const companies = edges.map((edge: any) => edge.node);
 		
 		if (companies.length === 0) {
 			return {
@@ -1253,8 +1246,9 @@ export async function findCompanyUnified(
 	}
 }
 
-// List people by company
-export async function listPersonsByCompany(
+
+// GraphQL equivalent of listPersonsByCompany
+export async function listPersonsByCompanyGraphQL(
 	this: IExecuteFunctions,
 	companyId: string
 ) {
@@ -1266,15 +1260,56 @@ export async function listPersonsByCompany(
 			);
 		}
 		
-		const endpoint = '/people';
-		const qs: IDataObject = {
-			filter: `companyId[eq]:"${companyId}"`,
-			limit: 100 // Allow more results for company listings
+		// GraphQL query to get people by company
+		const query = `
+			query GetPeopleByCompany($filter: PersonFilterInput, $first: Int) {
+				people(filter: $filter, first: $first) {
+					edges {
+						node {
+							id
+							name {
+								firstName
+								lastName
+							}
+							emails {
+								primaryEmail
+							}
+							phones {
+								primaryPhoneNumber
+								primaryPhoneCountryCode
+								primaryPhoneCallingCode
+							}
+							jobTitle
+							city
+							avatarUrl
+							linkedinLink {
+								primaryLinkUrl
+							}
+							xLink {
+								primaryLinkUrl
+							}
+						}
+					}
+					pageInfo {
+						hasNextPage
+						hasPreviousPage
+						startCursor
+						endCursor
+					}
+				}
+			}
+		`;
+		
+		const variables = {
+			filter: {
+				companyId: { eq: companyId }
+			},
+			first: 100
 		};
 		
-		const response = await twentyApiRequest.call(this, 'GET', endpoint, {}, qs);
-		
-		const people = response.data?.people || [];
+		const response = await twentyGraphQLRequest.call(this, query, variables);
+		const edges = response.data?.people?.edges || [];
+		const people = edges.map((edge: any) => edge.node);
 		
 		return {
 			companyId: companyId,
@@ -1287,5 +1322,865 @@ export async function listPersonsByCompany(
 			this.getNode(),
 			`Failed to list people by company: ${error.message}`
 		);
+	}
+}
+
+// ============================================================================
+// OPPORTUNITY-SPECIFIC GRAPHQL FUNCTIONS
+// ============================================================================
+
+export async function findOpportunityUnifiedGraphQL(
+	this: IExecuteFunctions,
+	searchBy: string,
+	searchValue: string,
+	additionalFields?: IDataObject,
+	includeRelated: boolean = true
+): Promise<{
+	found: boolean;
+	opportunity: any;
+	confidence: number;
+	searchMethod: string;
+	searchValue: string;
+	totalMatches?: number;
+}> {
+	try {
+		let confidence = 1.0;
+
+		switch (searchBy.toLowerCase()) {
+			case 'name':
+				confidence = searchValue ? (searchValue.length > 2 ? 0.95 : 0.8) : 0.5;
+				break;
+			case 'id':
+			case 'uuid':
+				confidence = 1.0;
+				break;
+			default:
+				throw new NodeOperationError(
+					this.getNode(),
+					`Unsupported search method for opportunity: ${searchBy}`
+				);
+		}
+
+		const relationFields = includeRelated ? `
+			company {
+				id
+				name
+				domainName {
+					primaryLinkUrl
+				}
+			}
+			pointOfContact {
+				id
+				name {
+					firstName
+					lastName
+				}
+				emails {
+					primaryEmail
+				}
+			}
+		` : '';
+
+		const query = `
+			query FindOpportunities($filter: OpportunityFilterInput) {
+				opportunities(filter: $filter) {
+					edges {
+						node {
+							id
+							name
+							amount {
+								amountMicros
+								currencyCode
+							}
+							closeDate
+							stage
+							position
+							createdBy {
+								source
+								name
+							}
+							createdAt
+							updatedAt
+							${relationFields}
+						}
+					}
+					totalCount
+				}
+			}
+		`;
+
+		const variables = { filter: { [searchBy === 'id' || searchBy === 'uuid' ? 'id' : searchBy]: { [searchBy === 'name' ? 'ilike' : 'eq']: searchValue } } };
+		const response = await twentyGraphQLRequest.call(this, query, variables);
+
+		const opportunities = response.data?.opportunities?.edges || [];
+		const totalCount = response.data?.opportunities?.totalCount || 0;
+
+		if (opportunities.length === 0) {
+			return {
+				found: false,
+				opportunity: null,
+				confidence: 0,
+				searchMethod: searchBy,
+				searchValue: searchValue,
+				totalMatches: 0,
+			};
+		}
+
+		// For exact matches (like ID), return first result with high confidence
+		if (searchBy === 'id' || searchBy === 'uuid') {
+			return {
+				found: true,
+				opportunity: opportunities[0].node,
+				confidence: 1.0,
+				searchMethod: searchBy,
+				searchValue: searchValue,
+				totalMatches: totalCount,
+			};
+		}
+
+		// For name searches, look for exact match first
+		let bestMatch = opportunities[0].node;
+		let bestConfidence = confidence;
+
+		if (searchBy === 'name') {
+			for (const edge of opportunities) {
+				const opportunity = edge.node;
+				if (opportunity.name && opportunity.name.toLowerCase() === searchValue.toLowerCase()) {
+					bestMatch = opportunity;
+					bestConfidence = 1.0;
+					break;
+				}
+			}
+		}
+
+		return {
+			found: true,
+			opportunity: bestMatch,
+			confidence: bestConfidence,
+			searchMethod: searchBy,
+			searchValue: searchValue,
+			totalMatches: totalCount,
+		};
+
+	} catch (error) {
+		throw new NodeOperationError(
+			this.getNode(),
+			`Failed to find opportunity: ${error.message}`
+		);
+	}
+}
+
+export async function findOrCreateOpportunityGraphQL(
+	this: IExecuteFunctions,
+	opportunityData: IDataObject
+): Promise<{
+	created: boolean;
+	action: string;
+	opportunity: any;
+	confidence: number;
+}> {
+	try {
+		// First, try to find existing opportunity by name
+		if (opportunityData.name) {
+			const existingResult = await findOpportunityUnifiedGraphQL.call(
+				this,
+				'name',
+				opportunityData.name as string,
+				undefined,
+				true
+			);
+
+			if (existingResult.found && existingResult.confidence > 0.8) {
+				return {
+					created: false,
+					action: 'found_existing',
+					opportunity: existingResult.opportunity,
+					confidence: existingResult.confidence,
+				};
+			}
+		}
+
+		// Create new opportunity
+		const mutation = `
+			mutation CreateOpportunity($data: OpportunityCreateInput!) {
+				createOpportunity(data: $data) {
+					id
+					name
+					amount {
+						amountMicros
+						currencyCode
+					}
+					closeDate
+					stage
+					position
+					createdBy {
+						source
+						name
+					}
+					createdAt
+					updatedAt
+					company {
+						id
+						name
+					}
+					pointOfContact {
+						id
+						name {
+							firstName
+							lastName
+						}
+					}
+				}
+			}
+		`;
+
+		const createData: IDataObject = {};
+
+		// Required fields
+		if (opportunityData.name) createData.name = opportunityData.name;
+
+		// Optional fields
+		if (opportunityData.amount) createData.amount = opportunityData.amount;
+		if (opportunityData.closeDate) createData.closeDate = opportunityData.closeDate;
+		if (opportunityData.stage) createData.stage = opportunityData.stage;
+		if (opportunityData.position !== undefined) createData.position = opportunityData.position;
+		
+		// Relations
+		if (opportunityData.companyId) createData.companyId = opportunityData.companyId;
+		if (opportunityData.pointOfContactId) createData.pointOfContactId = opportunityData.pointOfContactId;
+
+		const variables = { data: createData };
+		const response = await twentyGraphQLRequest.call(this, mutation, variables);
+
+		if (!response.data?.createOpportunity) {
+			throw new NodeOperationError(
+				this.getNode(),
+				'Failed to create opportunity - no data returned'
+			);
+		}
+
+		return {
+			created: true,
+			action: 'created_new',
+			opportunity: response.data.createOpportunity,
+			confidence: 1.0,
+		};
+
+	} catch (error) {
+		throw new NodeOperationError(
+			this.getNode(),
+			`Failed to find or create opportunity: ${error.message}`
+		);
+	}
+}
+
+export async function updateOpportunityGraphQL(
+	this: IExecuteFunctions,
+	opportunityId: string,
+	updateData: IDataObject
+): Promise<{
+	updated: boolean;
+	opportunity: any;
+	error?: string;
+}> {
+	try {
+		const mutation = `
+			mutation UpdateOpportunity($idToUpdate: UUID!, $input: OpportunityUpdateInput!) {
+				updateOpportunity(id: $idToUpdate, data: $input) {
+					id
+					name
+					amount {
+						amountMicros
+						currencyCode
+					}
+					closeDate
+					stage
+					position
+					createdBy {
+						source
+						name
+					}
+					createdAt
+					updatedAt
+					company {
+						id
+						name
+					}
+					pointOfContact {
+						id
+						name {
+							firstName
+							lastName
+						}
+					}
+				}
+			}
+		`;
+
+		const variables = { idToUpdate: opportunityId, input: updateData };
+		const response = await twentyGraphQLRequest.call(this, mutation, variables);
+
+		if (!response.data?.updateOpportunity) {
+			return {
+				updated: false,
+				opportunity: null,
+				error: 'No data returned from update operation',
+			};
+		}
+
+		return {
+			updated: true,
+			opportunity: response.data.updateOpportunity,
+		};
+
+	} catch (error) {
+		return {
+			updated: false,
+			opportunity: null,
+			error: error.message,
+		};
+	}
+}
+
+export async function deleteOpportunityGraphQL(
+	this: IExecuteFunctions,
+	opportunityId: string
+): Promise<{
+	deleted: boolean;
+	opportunityId: string;
+	error?: string;
+}> {
+	try {
+		const mutation = `
+			mutation DeleteOpportunity($idToDelete: UUID!) {
+				deleteOpportunity(id: $idToDelete) {
+					id
+				}
+			}
+		`;
+
+		const variables = { idToDelete: opportunityId };
+		const response = await twentyGraphQLRequest.call(this, mutation, variables);
+
+		if (!response.data?.deleteOpportunity) {
+			return {
+				deleted: false,
+				opportunityId,
+				error: 'No confirmation returned from delete operation',
+			};
+		}
+
+		return {
+			deleted: true,
+			opportunityId: response.data.deleteOpportunity.id,
+		};
+
+	} catch (error) {
+		return {
+			deleted: false,
+			opportunityId,
+			error: error.message,
+		};
+	}
+}
+
+export async function listOpportunitiesGraphQL(
+	this: IExecuteFunctions,
+	filters?: IDataObject,
+	limit?: number,
+	orderBy?: string
+): Promise<{
+	opportunities: any[];
+	totalCount: number;
+	hasNextPage: boolean;
+}> {
+	try {
+
+		const query = `
+			query ListOpportunities($filter: OpportunityFilterInput, $orderBy: [OpportunityOrderByInput], $first: Int) {
+				opportunities(filter: $filter, orderBy: $orderBy, first: $first) {
+					edges {
+						node {
+							id
+							name
+							amount {
+								amountMicros
+								currencyCode
+							}
+							closeDate
+							stage
+							position
+							createdBy {
+								source
+								name
+							}
+							createdAt
+							updatedAt
+							company {
+								id
+								name
+								domainName {
+									primaryLinkUrl
+								}
+							}
+							pointOfContact {
+								id
+								name {
+									firstName
+									lastName
+								}
+								emails {
+									primaryEmail
+								}
+							}
+						}
+						cursor
+					}
+					pageInfo {
+						hasNextPage
+						hasPreviousPage
+						startCursor
+						endCursor
+					}
+					totalCount
+				}
+			}
+		`;
+
+		// Build variables object
+		const variables: any = {
+			first: limit || 50,
+		};
+
+		if (filters) {
+			const filterObj: any = {};
+			if (filters.stage) filterObj.stage = { eq: filters.stage };
+			if (filters.companyId) filterObj.companyId = { eq: filters.companyId };
+			if (filters.pointOfContactId) filterObj.pointOfContactId = { eq: filters.pointOfContactId };
+			if (filters.searchTerm) filterObj.name = { ilike: `%${filters.searchTerm}%` };
+			
+			if (Object.keys(filterObj).length > 0) {
+				variables.filter = filterObj;
+			}
+		}
+
+		if (orderBy) {
+			const [field, direction] = orderBy.split(':');
+			const directionMapping: { [key: string]: string } = {
+				'ASC': 'AscNullsFirst',
+				'DESC': 'DescNullsLast'
+			};
+			const mappedDirection = directionMapping[direction?.toUpperCase() || 'ASC'] || 'AscNullsFirst';
+			variables.orderBy = [{ [field]: mappedDirection }];
+		}
+
+		const response = await twentyGraphQLRequest.call(this, query, variables);
+		const data = response.data?.opportunities;
+
+		if (!data) {
+			return {
+				opportunities: [],
+				totalCount: 0,
+				hasNextPage: false,
+			};
+		}
+
+		return {
+			opportunities: data.edges.map((edge: any) => edge.node),
+			totalCount: data.totalCount,
+			hasNextPage: data.pageInfo.hasNextPage,
+		};
+
+	} catch (error) {
+		throw new NodeOperationError(
+			this.getNode(),
+			`Failed to list opportunities: ${error.message}`
+		);
+	}
+}
+
+// ============================================================================
+// DELETE OPERATIONS - GraphQL
+// ============================================================================
+
+export async function deletePersonGraphQL(
+	this: IExecuteFunctions,
+	personId: string
+): Promise<{
+	deleted: boolean;
+	personId: string;
+	error?: string;
+}> {
+	try {
+		if (!isValidTwentyUuid(personId)) {
+			return {
+				deleted: false,
+				personId,
+				error: 'Invalid person ID format. Must be a valid UUID.',
+			};
+		}
+
+		const mutation = `
+			mutation DeletePerson($idToDelete: UUID!) {
+				deletePerson(id: $idToDelete) {
+					id
+				}
+			}
+		`;
+
+		const variables = { idToDelete: personId };
+		const response = await twentyGraphQLRequest.call(this, mutation, variables);
+
+		if (!response.data?.deletePerson) {
+			return {
+				deleted: false,
+				personId,
+				error: 'No confirmation returned from delete operation',
+			};
+		}
+
+		return {
+			deleted: true,
+			personId: response.data.deletePerson.id,
+		};
+
+	} catch (error) {
+		return {
+			deleted: false,
+			personId,
+			error: error.message,
+		};
+	}
+}
+
+export async function deleteCompanyGraphQL(
+	this: IExecuteFunctions,
+	companyId: string
+): Promise<{
+	deleted: boolean;
+	companyId: string;
+	error?: string;
+}> {
+	try {
+		if (!isValidTwentyUuid(companyId)) {
+			return {
+				deleted: false,
+				companyId,
+				error: 'Invalid company ID format. Must be a valid UUID.',
+			};
+		}
+
+		const mutation = `
+			mutation DeleteCompany($idToDelete: UUID!) {
+				deleteCompany(id: $idToDelete) {
+					id
+				}
+			}
+		`;
+
+		const variables = { idToDelete: companyId };
+		const response = await twentyGraphQLRequest.call(this, mutation, variables);
+
+		if (!response.data?.deleteCompany) {
+			return {
+				deleted: false,
+				companyId,
+				error: 'No confirmation returned from delete operation',
+			};
+		}
+
+		return {
+			deleted: true,
+			companyId: response.data.deleteCompany.id,
+		};
+
+	} catch (error) {
+		return {
+			deleted: false,
+			companyId,
+			error: error.message,
+		};
+	}
+}
+
+// ============================================================================
+// UPDATE OPERATIONS - GraphQL
+// ============================================================================
+
+export async function updateCompanyGraphQL(
+	this: IExecuteFunctions,
+	companyId: string,
+	updateData: IDataObject
+): Promise<{
+	updated: boolean;
+	company: any;
+	error?: string;
+}> {
+	try {
+		if (!isValidTwentyUuid(companyId)) {
+			return {
+				updated: false,
+				company: null,
+				error: 'Invalid company ID format. Must be a valid UUID.',
+			};
+		}
+
+		const mutation = `
+			mutation UpdateCompany($idToUpdate: UUID!, $input: CompanyUpdateInput!) {
+				updateCompany(id: $idToUpdate, data: $input) {
+					id
+					name
+					domainName {
+						primaryLinkUrl
+					}
+					employees
+					address {
+						addressStreet1
+						addressStreet2
+						addressCity
+						addressPostcode
+						addressState
+						addressCountry
+					}
+					annualRecurringRevenue {
+						amountMicros
+						currencyCode
+					}
+					linkedinLink {
+						primaryLinkUrl
+					}
+					xLink {
+						primaryLinkUrl
+					}
+					accountOwnerId
+					accountOwner {
+						id
+						name {
+							firstName
+							lastName
+						}
+					}
+					createdAt
+					updatedAt
+				}
+			}
+		`;
+
+		const variables = { idToUpdate: companyId, input: updateData };
+		const response = await twentyGraphQLRequest.call(this, mutation, variables);
+
+		if (!response.data?.updateCompany) {
+			return {
+				updated: false,
+				company: null,
+				error: 'No data returned from update operation',
+			};
+		}
+
+		return {
+			updated: true,
+			company: response.data.updateCompany,
+		};
+
+	} catch (error) {
+		return {
+			updated: false,
+			company: null,
+			error: error.message,
+		};
+	}
+}
+
+// ============================================================================
+// UNIFIED PERSON UPDATE FUNCTION
+// ============================================================================
+
+export async function updatePersonUnifiedGraphQL(
+	this: IExecuteFunctions,
+	searchBy: string,
+	searchValue: string,
+	updateData: IDataObject
+): Promise<{
+	updated: boolean;
+	person: any;
+	originalPerson?: any;
+	error?: string;
+}> {
+	try {
+		// First find the person using unified search
+		const findResult = await findPersonUnifiedGraphQL.call(this, searchBy, searchValue, undefined, false);
+		if (!findResult.found) {
+			return {
+				updated: false,
+				person: null,
+				error: 'Person not found',
+			};
+		}
+
+		const personId = findResult.person.id;
+
+		// Build update data structure for GraphQL
+		const processedData: IDataObject = {};
+
+		if (updateData.name || updateData.firstName || updateData.lastName) {
+			const updateNameData = updateData.name as IDataObject;
+			const personNameData = findResult.person.name as IDataObject;
+			processedData.name = {
+				firstName: updateData.firstName || updateNameData?.firstName || personNameData?.firstName || '',
+				lastName: updateData.lastName || updateNameData?.lastName || personNameData?.lastName || ''
+			};
+		}
+
+		if (updateData.emails || updateData.email) {
+			const emailsData = updateData.emails as IDataObject;
+			processedData.emails = {
+				primaryEmail: updateData.email || emailsData?.primaryEmail
+			};
+		}
+
+		if (updateData.phones || updateData.phone) {
+			const phonesData = updateData.phones as IDataObject;
+			processedData.phones = {
+				primaryPhoneNumber: updateData.phone || phonesData?.primaryPhoneNumber || '',
+				primaryPhoneCountryCode: updateData.phoneCountryCode || phonesData?.primaryPhoneCountryCode || '',
+				primaryPhoneCallingCode: updateData.phoneCallingCode || phonesData?.primaryPhoneCallingCode || ''
+			};
+		}
+
+		if (updateData.jobTitle !== undefined) processedData.jobTitle = updateData.jobTitle;
+		if (updateData.city !== undefined) processedData.city = updateData.city;
+		if (updateData.avatarUrl !== undefined) processedData.avatarUrl = updateData.avatarUrl;
+		if (updateData.position !== undefined) processedData.position = updateData.position;
+		if (updateData.companyId !== undefined) processedData.companyId = updateData.companyId;
+
+		if (updateData.linkedinUrl || updateData.linkedinLink) {
+			const linkedinData = updateData.linkedinLink as IDataObject;
+			processedData.linkedinLink = {
+				primaryLinkUrl: updateData.linkedinUrl || linkedinData?.primaryLinkUrl
+			};
+		}
+
+		if (updateData.xUrl || updateData.xLink) {
+			const xData = updateData.xLink as IDataObject;
+			processedData.xLink = {
+				primaryLinkUrl: updateData.xUrl || xData?.primaryLinkUrl
+			};
+		}
+
+		// GraphQL mutation to update person
+		const mutation = `
+			mutation UpdatePerson($id: UUID!, $data: PersonUpdateInput!) {
+				updatePerson(id: $id, data: $data) {
+					id
+					name {
+						firstName
+						lastName
+					}
+					emails {
+						primaryEmail
+					}
+					phones {
+						primaryPhoneNumber
+						primaryPhoneCountryCode
+						primaryPhoneCallingCode
+					}
+					jobTitle
+					city
+					avatarUrl
+					linkedinLink {
+						primaryLinkUrl
+					}
+					xLink {
+						primaryLinkUrl
+					}
+					company {
+						id
+						name
+						domainName {
+							primaryLinkUrl
+						}
+					}
+				}
+			}
+		`;
+
+		const response = await twentyGraphQLRequest.call(this, mutation, { 
+			id: personId, 
+			data: processedData 
+		});
+		const updatedPerson = response.data?.updatePerson;
+
+		return {
+			updated: true,
+			person: updatedPerson,
+			originalPerson: findResult.person,
+		};
+
+	} catch (error) {
+		return {
+			updated: false,
+			person: null,
+			error: error.message,
+		};
+	}
+}
+
+// ============================================================================
+// WORKSPACE MEMBER LOOKUP FUNCTIONS
+// ============================================================================
+
+export async function findWorkspaceMemberByEmailGraphQL(
+	this: IExecuteFunctions,
+	email: string
+): Promise<{
+	found: boolean;
+	workspaceMember: any;
+	error?: string;
+}> {
+	try {
+		const query = `
+			query FindWorkspaceMemberByEmail($filter: WorkspaceMemberFilterInput) {
+				workspaceMembers(filter: $filter) {
+					edges {
+						node {
+							id
+							name {
+								firstName
+								lastName
+							}
+						}
+					}
+				}
+			}
+		`;
+
+		const variables = {
+			filter: {
+				name: { eq: email }
+			}
+		};
+
+		const response = await twentyGraphQLRequest.call(this, query, variables);
+		const edges = response.data?.workspaceMembers?.edges || [];
+
+		if (edges.length === 0) {
+			return {
+				found: false,
+				workspaceMember: null,
+				error: `No workspace member found with email: ${email}`
+			};
+		}
+
+		return {
+			found: true,
+			workspaceMember: edges[0].node
+		};
+
+	} catch (error) {
+		return {
+			found: false,
+			workspaceMember: null,
+			error: `Failed to find workspace member: ${error.message}`
+		};
 	}
 }

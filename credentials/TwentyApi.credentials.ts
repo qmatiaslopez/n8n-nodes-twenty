@@ -36,7 +36,11 @@ export class TwentyApi implements ICredentialType {
 	test: ICredentialTestRequest = {
 		request: {
 			baseURL: '={{$credentials?.domain}}',
-			url: '/rest/open-api/core',
+			url: '/graphql',
+			method: 'POST',
+			body: {
+				query: 'query { __schema { types { name } } }',
+			},
 		},
 	};
 }

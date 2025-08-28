@@ -1,20 +1,28 @@
 {
   "name": "n8n-nodes-twenty-fork",
-  "version": "0.6.7",
-  "description": "n8n node for Twenty CRM v1.4.0+ API with unified search, smart field resolution, and custom field support. Fixed Update Company search for Domain and Custom Field parameters. Enhanced searchVector to include custom fields automatically.",
+  "version": "1.0.5",
+  "description": "n8n node for Twenty CRM with full GraphQL API integration. Complete CRUD operations for People, Companies, and Opportunities. Migration from REST to GraphQL for better reliability and performance. All operations use Twenty's primary GraphQL endpoint.",
   "keywords": [
     "n8n-community-node-package",
+    "twenty-crm",
+    "crm",
+    "graphql",
+    "opportunities",
+    "sales-pipeline",
     "twenty-fork",
     "twenty-v1.4.0",
     "community-fork",
-    "twenty-crm",
-    "crm",
     "unified-search",
     "smart-fields",
     "custom-fields",
-    "field-resolution"
+    "field-resolution",
+    "automation",
+    "workflow"
   ],
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "homepage": "https://github.com/qmatiaslopez/n8n-nodes-twenty",
   "author": {
     "name": "Matias Lopez",

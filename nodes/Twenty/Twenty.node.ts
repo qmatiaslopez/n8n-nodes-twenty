@@ -4,21 +4,12 @@ import {
 	INodeType,
 	INodeTypeDescription,
 	NodeOperationError,
-	IDataObject,
 } from 'n8n-workflow';
 
-import {
-	findOrCreateContact,
-	findOrCreateCompany,
-	updateContactByEmail,
-	updateCompanyByName,
-	twentyApiRequest,
-	prepareRequestBody,
-	findPersonUnified,
-	findCompanyUnified,
-	listPersonsByCompany,
-	resolveFieldName,
-} from './GenericFunctions';
+// Import operations modules
+import { PersonOperations } from './operations/PersonOperations';
+import { CompanyOperations } from './operations/CompanyOperations';
+import { OpportunityOperations } from './operations/OpportunityOperations';
 
 export class Twenty implements INodeType {
 	description: INodeTypeDescription = {
@@ -52,6 +43,11 @@ export class Twenty implements INodeType {
 						description: 'Create a new company',
 					},
 					{
+						name: 'Create Opportunity',
+						value: 'createOpportunity',
+						description: 'Create a new opportunity',
+					},
+					{
 						name: 'Create Person',
 						value: 'createPerson',
 						description: 'Create a new person',
@@ -60,6 +56,11 @@ export class Twenty implements INodeType {
 						name: 'Delete Company',
 						value: 'deleteCompany',
 						description: 'Delete a company',
+					},
+					{
+						name: 'Delete Opportunity',
+						value: 'deleteOpportunity',
+						description: 'Delete an opportunity',
 					},
 					{
 						name: 'Delete Person',
@@ -72,9 +73,19 @@ export class Twenty implements INodeType {
 						description: 'Search for a company using various criteria',
 					},
 					{
+						name: 'Find Opportunity',
+						value: 'findOpportunity',
+						description: 'Search for an opportunity using various criteria',
+					},
+					{
 						name: 'Find Person',
 						value: 'findPerson',
 						description: 'Search for a person using various criteria',
+					},
+					{
+						name: 'List Opportunities',
+						value: 'listOpportunities',
+						description: 'List opportunities with optional filters',
 					},
 					{
 						name: 'List People by Company',
@@ -85,6 +96,11 @@ export class Twenty implements INodeType {
 						name: 'Update Company',
 						value: 'updateCompany',
 						description: 'Update an existing company',
+					},
+					{
+						name: 'Update Opportunity',
+						value: 'updateOpportunity',
+						description: 'Update an existing opportunity',
 					},
 					{
 						name: 'Update Person',
@@ -103,8 +119,7 @@ export class Twenty implements INodeType {
 				options: [
 					{ name: 'Email', value: 'email' },
 					{ name: 'Phone', value: 'phone' },
-					{ name: 'Name', value: 'name' },
-					{ name: 'Custom Field', value: 'customField' },
+					{ name: 'LinkedIn', value: 'linkedin' },
 				],
 				displayOptions: {
 					show: {
@@ -122,8 +137,6 @@ export class Twenty implements INodeType {
 				type: 'options',
 				options: [
 					{ name: 'Name', value: 'name' },
-					{ name: 'Domain', value: 'domain' },
-					{ name: 'Custom Field', value: 'customField' },
 				],
 				displayOptions: {
 					show: {
@@ -134,21 +147,24 @@ export class Twenty implements INodeType {
 				description: 'How to search for the company',
 			},
 
-			// Custom field name (for find operations)
+			// Search configuration for opportunity
 			{
-				displayName: 'Custom Field Name',
-				name: 'customFieldName',
-				type: 'string',
+				displayName: 'Search By',
+				name: 'searchBy',
+				type: 'options',
+				options: [
+					{ name: 'Name', value: 'name' },
+					{ name: 'ID/UUID', value: 'id' },
+				],
 				displayOptions: {
 					show: {
-						useCase: ['findPerson', 'findCompany'],
-						searchBy: ['customField'],
+						useCase: ['findOpportunity'],
 					},
 				},
-				default: '',
-				placeholder: 'instagram, linkedin, etc.',
-				description: 'Field name (will try with "Link" suffix if not found)',
+				default: 'name',
+				description: 'How to search for the opportunity',
 			},
+
 
 			// Search value (unified for all search operations)
 			{
@@ -158,7 +174,7 @@ export class Twenty implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						useCase: ['findPerson', 'findCompany'],
+						useCase: ['findPerson', 'findCompany', 'findOpportunity'],
 					},
 				},
 				default: '',
@@ -166,21 +182,6 @@ export class Twenty implements INodeType {
 				description: 'The value to search for in the selected field',
 			},
 
-
-			// Contact creation fields
-			{
-				displayName: 'First Name',
-				name: 'firstName',
-				type: 'string',
-				required: true,
-				displayOptions: {
-					show: {
-						useCase: ['addContact', 'createPerson'],
-					},
-				},
-				default: '',
-				description: 'First name of the contact',
-			},
 
 			// Company name for createCompany
 			{
@@ -197,6 +198,21 @@ export class Twenty implements INodeType {
 				description: 'Name of the company to create',
 			},
 
+			// Opportunity name for createOpportunity
+			{
+				displayName: 'Opportunity Name',
+				name: 'opportunityName',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						useCase: ['createOpportunity'],
+					},
+				},
+				default: '',
+				description: 'Name of the opportunity to create',
+			},
+
 			// Search configuration for delete/update person
 			{
 				displayName: 'Search By',
@@ -205,7 +221,7 @@ export class Twenty implements INodeType {
 				options: [
 					{ name: 'Email', value: 'email' },
 					{ name: 'Phone', value: 'phone' },
-					{ name: 'Custom Field', value: 'customField' },
+					{ name: 'LinkedIn', value: 'linkedin' },
 				],
 				displayOptions: {
 					show: {
@@ -213,7 +229,7 @@ export class Twenty implements INodeType {
 					},
 				},
 				default: 'email',
-				description: 'How to search for the person (name removed to prevent multiple results)',
+				description: 'How to search for the person',
 			},
 
 			// Search configuration for delete/update company
@@ -223,8 +239,6 @@ export class Twenty implements INodeType {
 				type: 'options',
 				options: [
 					{ name: 'Name', value: 'name' },
-					{ name: 'Domain', value: 'domain' },
-					{ name: 'Custom Field', value: 'customField' },
 				],
 				displayOptions: {
 					show: {
@@ -235,21 +249,24 @@ export class Twenty implements INodeType {
 				description: 'How to search for the company',
 			},
 
-			// Custom field name (for delete/update operations)
+			// Search configuration for delete/update opportunity
 			{
-				displayName: 'Custom Field Name',
-				name: 'updateCustomFieldName',
-				type: 'string',
+				displayName: 'Search By',
+				name: 'updateSearchBy',
+				type: 'options',
+				options: [
+					{ name: 'Name', value: 'name' },
+					{ name: 'ID/UUID', value: 'id' },
+				],
 				displayOptions: {
 					show: {
-						useCase: ['deletePerson', 'updatePerson', 'deleteCompany', 'updateCompany'],
-						updateSearchBy: ['customField'],
+						useCase: ['deleteOpportunity', 'updateOpportunity'],
 					},
 				},
-				default: '',
-				placeholder: 'instagram, linkedin, etc.',
-				description: 'Field name (will try with "Link" suffix if not found)',
+				default: 'name',
+				description: 'How to search for the opportunity',
 			},
+
 
 			// Search value (for delete/update operations)
 			{
@@ -259,7 +276,7 @@ export class Twenty implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						useCase: ['deletePerson', 'updatePerson', 'deleteCompany', 'updateCompany'],
+						useCase: ['deletePerson', 'updatePerson', 'deleteCompany', 'updateCompany', 'deleteOpportunity', 'updateOpportunity'],
 					},
 				},
 				default: '',
@@ -607,6 +624,168 @@ export class Twenty implements INodeType {
 						default: '',
 						description: 'Company address country',
 					},
+					{
+						displayName: 'Account Owner Email',
+						name: 'accountOwnerEmail',
+						type: 'string',
+						default: '',
+						placeholder: 'owner@company.com',
+						description: 'Email of the account owner to assign to this company',
+					},
+				],
+			},
+
+			// Additional fields for opportunity operations
+			{
+				displayName: 'Additional Fields',
+				name: 'additionalFields',
+				type: 'collection',
+				placeholder: 'Add Field',
+				displayOptions: {
+					show: {
+						useCase: [
+							'createOpportunity',
+							'updateOpportunity',
+						],
+					},
+				},
+				default: {},
+				options: [
+					{
+						displayName: 'Opportunity Name',
+						name: 'name',
+						type: 'string',
+						default: '',
+						description: 'Name of the opportunity',
+					},
+					{
+						displayName: 'Amount',
+						name: 'amount',
+						type: 'number',
+						default: 0,
+						description: 'Opportunity amount in micros (e.g., 1000000 = $1)',
+					},
+					{
+						displayName: 'Currency Code',
+						name: 'currencyCode',
+						type: 'string',
+						default: 'USD',
+						placeholder: 'USD, EUR, GBP, etc.',
+						description: 'Currency code for the amount',
+					},
+					{
+						displayName: 'Close Date',
+						name: 'closeDate',
+						type: 'dateTime',
+						default: '',
+						description: 'Expected closing date of the opportunity',
+					},
+					{
+						displayName: 'Stage',
+						name: 'stage',
+						type: 'options',
+						options: [
+							{ name: 'Customer', value: 'CUSTOMER' },
+							{ name: 'Meeting', value: 'MEETING' },
+							{ name: 'New', value: 'NEW' },
+							{ name: 'Proposal', value: 'PROPOSAL' },
+							{ name: 'Screening', value: 'SCREENING' },
+						],
+						default: 'NEW',
+						description: 'Current stage of the opportunity',
+					},
+					{
+						displayName: 'Company Name',
+						name: 'companyName',
+						type: 'string',
+						default: '',
+						description: 'Name of the company this opportunity belongs to',
+					},
+					{
+						displayName: 'Point of Contact Email',
+						name: 'pointOfContactEmail',
+						type: 'string',
+						default: '',
+						placeholder: 'contact@company.com',
+						description: 'Email of the person who is the point of contact',
+					},
+				],
+			},
+
+			// Filters for list opportunities
+			{
+				displayName: 'Filters',
+				name: 'filters',
+				type: 'collection',
+				placeholder: 'Add Filter',
+				displayOptions: {
+					show: {
+						useCase: ['listOpportunities'],
+					},
+				},
+				default: {},
+				options: [
+					{
+						displayName: 'Stage',
+						name: 'stage',
+						type: 'options',
+						options: [
+							{ name: 'Customer', value: 'CUSTOMER' },
+							{ name: 'Meeting', value: 'MEETING' },
+							{ name: 'New', value: 'NEW' },
+							{ name: 'Proposal', value: 'PROPOSAL' },
+							{ name: 'Screening', value: 'SCREENING' },
+						],
+						default: 'NEW',
+						description: 'Filter opportunities by stage',
+					},
+					{
+						displayName: 'Company ID',
+						name: 'companyId',
+						type: 'string',
+						default: '',
+						description: 'Filter opportunities by company ID',
+					},
+					{
+						displayName: 'Point of Contact ID',
+						name: 'pointOfContactId',
+						type: 'string',
+						default: '',
+						description: 'Filter opportunities by point of contact ID',
+					},
+					{
+						displayName: 'Search Term',
+						name: 'searchTerm',
+						type: 'string',
+						default: '',
+						placeholder: 'Search in opportunity names',
+						description: 'Search term to filter opportunities by name',
+					},
+					{
+						displayName: 'Limit',
+						name: 'limit',
+						type: 'number',
+						typeOptions: {
+							minValue: 1,
+						},
+						default: 50,
+						description: 'Max number of results to return',
+					},
+					{
+						displayName: 'Order By',
+						name: 'orderBy',
+						type: 'options',
+						options: [
+							{ name: 'Close Date (Latest)', value: 'closeDate:DESC' },
+							{ name: 'Close Date (Soonest)', value: 'closeDate:ASC' },
+							{ name: 'Created Date (Newest)', value: 'createdAt:DESC' },
+							{ name: 'Created Date (Oldest)', value: 'createdAt:ASC' },
+							{ name: 'Name (A-Z)', value: 'name:ASC' },
+							{ name: 'Name (Z-A)', value: 'name:DESC' },
+						],
+						default: 'createdAt:DESC',
+						description: 'How to sort the results',
+					},
 				],
 			},
 
@@ -640,831 +819,97 @@ export class Twenty implements INodeType {
 				let responseData: any;
 
 				switch (useCase) {
-					// NEW UNIFIED OPERATIONS
-					case 'findPerson': {
-						const searchBy = this.getNodeParameter('searchBy', i) as string;
-						const searchValue = this.getNodeParameter('searchValue', i) as string;
-						const customFieldName = searchBy === 'customField' 
-							? this.getNodeParameter('customFieldName', i) as string 
-							: undefined;
-
-						const result = await findPersonUnified.call(
-							this, 
-							searchBy, 
-							searchValue, 
-							customFieldName,
-							true
-						);
-						
-						responseData = {
-							found: result.found,
-							person: result.person,
-							confidence: result.confidence,
-							recordId: result.person?.id || null,
-							searchMethod: result.searchMethod,
-							searchValue: result.searchValue,
-							totalMatches: result.totalMatches || 0,
-							message: result.found 
-								? `Person found: ${result.person.name?.firstName || ''} ${result.person.name?.lastName || ''}`.trim()
-								: `No person found with ${result.searchMethod}: ${result.searchValue}`,
-						};
+					// PERSON OPERATIONS
+					case 'findPerson':
+						responseData = await PersonOperations.findPerson(this, i);
 						break;
-					}
 
-					case 'findCompany': {
-						const searchBy = this.getNodeParameter('searchBy', i) as string;
-						const searchValue = this.getNodeParameter('searchValue', i) as string;
-						const customFieldName = searchBy === 'customField' 
-							? this.getNodeParameter('customFieldName', i) as string 
-							: undefined;
-
-						const result = await findCompanyUnified.call(
-							this, 
-							searchBy, 
-							searchValue, 
-							customFieldName,
-							true
-						);
-						
-						responseData = {
-							found: result.found,
-							company: result.company,
-							confidence: result.confidence,
-							recordId: result.company?.id || null,
-							searchMethod: result.searchMethod,
-							searchValue: result.searchValue,
-							totalMatches: result.totalMatches || 0,
-							message: result.found 
-								? `Company found: ${result.company.name}`
-								: `No company found with ${result.searchMethod}: ${result.searchValue}`,
-						};
+					case 'createPerson':
+						responseData = await PersonOperations.createPerson(this, i);
 						break;
-					}
 
-					case 'listPersonsByCompany': {
-						const companySearchBy = this.getNodeParameter('companySearchBy', i, 'name') as string;
-						const companyIdentifier = this.getNodeParameter('companyIdentifier', i) as string;
-						
-						let companyId = companyIdentifier;
-						
-						// If searching by name, find the company first
-						if (companySearchBy === 'name') {
-							const findResult = await findCompanyUnified.call(this, 'name', companyIdentifier, undefined, false);
-							if (!findResult.found) {
-								responseData = {
-									companyId: null,
-									people: [],
-									totalCount: 0,
-									error: 'Company not found',
-									message: `Company not found: ${companyIdentifier}`,
-								};
-								break;
-							}
-							companyId = findResult.company.id;
-						}
-
-						const result = await listPersonsByCompany.call(this, companyId);
-						
-						responseData = {
-							companyId: result.companyId,
-							companySearchBy: companySearchBy,
-							companyIdentifier: companyIdentifier,
-							people: result.people,
-							totalCount: result.totalCount,
-							message: `Found ${result.totalCount} people in company`,
-						};
+					case 'updatePerson':
+						responseData = await PersonOperations.updatePerson(this, i);
 						break;
-					}
 
-					case 'createPerson': {
-						const firstName = this.getNodeParameter('firstName', i) as string;
-						const additionalFields = this.getNodeParameter('additionalFields', i, {}) as any;
-
-						const personData: IDataObject = {
-							name: { firstName, lastName: additionalFields.lastName || '' },
-						};
-
-						// Map all person fields from additionalFields
-						if (additionalFields.email) {
-							personData.emails = { primaryEmail: additionalFields.email };
-						}
-						
-						if (additionalFields.phone || additionalFields.phoneCountryCode || additionalFields.phoneCallingCode) {
-							personData.phones = {
-								primaryPhoneNumber: additionalFields.phone || '',
-								primaryPhoneCountryCode: additionalFields.phoneCountryCode || '',
-								primaryPhoneCallingCode: additionalFields.phoneCallingCode || '',
-								additionalPhones: []
-							};
-						}
-
-						if (additionalFields.jobTitle) personData.jobTitle = additionalFields.jobTitle;
-						if (additionalFields.city) personData.city = additionalFields.city;
-						if (additionalFields.avatarUrl) personData.avatarUrl = additionalFields.avatarUrl;
-						if (additionalFields.position) personData.position = additionalFields.position;
-						if (additionalFields.companyId) personData.companyId = additionalFields.companyId;
-
-						if (additionalFields.linkedinUrl) {
-							personData.linkedinLink = { primaryLinkUrl: additionalFields.linkedinUrl };
-						}
-						
-						if (additionalFields.xUrl) {
-							personData.xLink = { primaryLinkUrl: additionalFields.xUrl };
-						}
-
-						const result = await findOrCreateContact.call(this, personData);
-						
-						responseData = {
-							created: result.created,
-							action: result.action,
-							person: result.person,
-							confidence: result.confidence,
-							recordId: result.person?.id,
-							message: result.created 
-								? `Person created: ${firstName} ${additionalFields.lastName || ''}`
-								: `Person already exists: ${firstName} ${additionalFields.lastName || ''}`,
-						};
+					case 'deletePerson':
+						responseData = await PersonOperations.deletePerson(this, i);
 						break;
-					}
 
-					case 'createCompany': {
-						const companyName = this.getNodeParameter('companyName', i) as string;
-						const additionalFields = this.getNodeParameter('additionalFields', i, {}) as any;
-
-						const companyData: IDataObject = { name: companyName };
-						
-						if (additionalFields.domain) {
-							companyData.domainName = { 
-								primaryLinkUrl: additionalFields.domain.startsWith('http') 
-									? additionalFields.domain 
-									: `https://${additionalFields.domain}` 
-							};
-						}
-						
-						if (additionalFields.employees) companyData.employees = additionalFields.employees;
-						
-						// Handle address
-						if (additionalFields.addressStreet1 || additionalFields.addressCity || 
-							additionalFields.addressPostcode || additionalFields.addressState || 
-							additionalFields.addressCountry) {
-							companyData.address = {
-								addressStreet1: additionalFields.addressStreet1 || '',
-								addressStreet2: additionalFields.addressStreet2 || '',
-								addressCity: additionalFields.addressCity || '',
-								addressPostcode: additionalFields.addressPostcode || '',
-								addressState: additionalFields.addressState || '',
-								addressCountry: additionalFields.addressCountry || '',
-							};
-						}
-
-						// Handle revenue
-						if (additionalFields.annualRecurringRevenueMicros || additionalFields.currencyCode) {
-							companyData.annualRecurringRevenue = {
-								amountMicros: additionalFields.annualRecurringRevenueMicros || 0,
-								currencyCode: additionalFields.currencyCode || 'USD',
-							};
-						}
-
-						if (additionalFields.companyLinkedinUrl) {
-							companyData.linkedinLink = { primaryLinkUrl: additionalFields.companyLinkedinUrl };
-						}
-						
-						if (additionalFields.companyXUrl) {
-							companyData.xLink = { primaryLinkUrl: additionalFields.companyXUrl };
-						}
-
-						const result = await findOrCreateCompany.call(this, companyData);
-						
-						responseData = {
-							created: result.created,
-							action: result.action,
-							company: result.company,
-							confidence: result.confidence,
-							recordId: result.company?.id,
-							message: result.created 
-								? `Company created: ${companyName}`
-								: `Company already exists: ${companyName}`,
-						};
+					case 'listPersonsByCompany':
+						responseData = await PersonOperations.listPersonsByCompany(this, i);
 						break;
-					}
 
-					case 'deletePerson': {
-						const searchBy = this.getNodeParameter('updateSearchBy', i) as string;
-						const searchValue = this.getNodeParameter('updateSearchValue', i) as string;
-						const customFieldName = searchBy === 'customField' 
-							? this.getNodeParameter('updateCustomFieldName', i) as string 
-							: undefined;
-
-						// First find the person using unified search
-						const findResult = await findPersonUnified.call(
-							this, 
-							searchBy, 
-							searchValue, 
-							customFieldName,
-							false
-						);
-						
-						if (!findResult.found) {
-							responseData = {
-								deleted: false,
-								error: 'Person not found',
-								searchMethod: searchBy,
-								searchValue: searchValue,
-								message: `Person not found with ${searchBy}: ${searchValue}`,
-							};
-							break;
-						}
-
-						const personId = findResult.person.id;
-
-						try {
-							await twentyApiRequest.call(this, 'DELETE', `/people/${personId}`);
-							responseData = {
-								deleted: true,
-								personId,
-								searchMethod: searchBy,
-								searchValue: searchValue,
-								confidence: findResult.confidence,
-								message: `Person deleted: ${searchValue}`,
-							};
-						} catch (error) {
-							responseData = {
-								deleted: false,
-								error: error.message,
-								searchMethod: searchBy,
-								searchValue: searchValue,
-								message: `Delete failed: ${error.message}`,
-							};
-						}
+					// COMPANY OPERATIONS
+					case 'findCompany':
+						responseData = await CompanyOperations.findCompany(this, i);
 						break;
-					}
 
-					case 'deleteCompany': {
-						const searchBy = this.getNodeParameter('updateSearchBy', i) as string;
-						const searchValue = this.getNodeParameter('updateSearchValue', i) as string;
-						const customFieldName = searchBy === 'customField' 
-							? this.getNodeParameter('updateCustomFieldName', i) as string 
-							: undefined;
-
-						// First find the company using unified search
-						const findResult = await findCompanyUnified.call(
-							this, 
-							searchBy, 
-							searchValue, 
-							customFieldName,
-							false
-						);
-						
-						if (!findResult.found || findResult.confidence < 0.9) {
-							responseData = {
-								deleted: false,
-								error: findResult.found 
-									? 'No exact match found, delete cancelled' 
-									: 'Company not found',
-								searchMethod: searchBy,
-								searchValue: searchValue,
-								confidence: findResult.confidence || 0,
-								message: `Company not found or no exact match with ${searchBy}: ${searchValue}`,
-							};
-							break;
-						}
-
-						const companyId = findResult.company.id;
-
-						try {
-							await twentyApiRequest.call(this, 'DELETE', `/companies/${companyId}`);
-							responseData = {
-								deleted: true,
-								companyId,
-								searchMethod: searchBy,
-								searchValue: searchValue,
-								confidence: findResult.confidence,
-								message: `Company deleted: ${searchValue}`,
-							};
-						} catch (error) {
-							responseData = {
-								deleted: false,
-								error: error.message,
-								searchMethod: searchBy,
-								searchValue: searchValue,
-								message: `Delete failed: ${error.message}`,
-							};
-						}
+					case 'createCompany':
+						responseData = await CompanyOperations.createCompany(this, i);
 						break;
-					}
 
-					case 'updatePerson': {
-						const searchBy = this.getNodeParameter('updateSearchBy', i) as string;
-						const searchValue = this.getNodeParameter('updateSearchValue', i) as string;
-						const customFieldName = searchBy === 'customField' 
-							? this.getNodeParameter('updateCustomFieldName', i) as string 
-							: undefined;
-						const additionalFields = this.getNodeParameter('additionalFields', i, {}) as any;
-						const customFields = this.getNodeParameter('customFields', i, {}) as any;
-
-						// First find the person using unified search
-						const findResult = await findPersonUnified.call(
-							this, 
-							searchBy, 
-							searchValue, 
-							customFieldName,
-							false
-						);
-						
-						if (!findResult.found) {
-							responseData = {
-								updated: false,
-								error: 'Person not found',
-								searchMethod: searchBy,
-								searchValue: searchValue,
-								message: `Person not found with ${searchBy}: ${searchValue}`,
-							};
-							break;
-						}
-
-						const personId = findResult.person.id;
-						const updateData: IDataObject = {};
-
-						// Build update data from additionalFields
-						if (additionalFields.firstName || additionalFields.lastName) {
-							updateData.name = { 
-								firstName: additionalFields.firstName || findResult.person.name?.firstName || '', 
-								lastName: additionalFields.lastName || findResult.person.name?.lastName || '' 
-							};
-						}
-
-						if (additionalFields.email) {
-							updateData.emails = { primaryEmail: additionalFields.email };
-						}
-
-						if (additionalFields.phone || additionalFields.phoneCountryCode || additionalFields.phoneCallingCode) {
-							// Simple phone structure - only include provided fields
-							updateData.phones = {
-								primaryPhoneNumber: additionalFields.phone || '',
-								primaryPhoneCountryCode: additionalFields.phoneCountryCode || '',
-								primaryPhoneCallingCode: additionalFields.phoneCallingCode || ''
-							};
-						}
-
-						if (additionalFields.jobTitle !== undefined) updateData.jobTitle = additionalFields.jobTitle;
-						if (additionalFields.city !== undefined) updateData.city = additionalFields.city;
-						if (additionalFields.avatarUrl !== undefined) updateData.avatarUrl = additionalFields.avatarUrl;
-						
-						// Handle company name lookup
-						if (additionalFields.companyName) {
-							const companyResult = await findCompanyUnified.call(this, 'name', additionalFields.companyName, undefined, false);
-							if (companyResult.found) {
-								updateData.companyId = companyResult.company.id;
-							} else {
-								throw new NodeOperationError(
-									this.getNode(),
-									`Company not found: ${additionalFields.companyName}`
-								);
-							}
-						}
-
-						if (additionalFields.linkedinUrl) {
-							updateData.linkedinLink = { primaryLinkUrl: additionalFields.linkedinUrl };
-						}
-						
-						if (additionalFields.xUrl) {
-							updateData.xLink = { primaryLinkUrl: additionalFields.xUrl };
-						}
-
-						// Handle custom field values
-						if (customFields.customField && Array.isArray(customFields.customField)) {
-							for (const field of customFields.customField) {
-								if (field.fieldName && field.fieldValue !== undefined) {
-									// Resolve field name with fallback
-									const fieldResolution = await resolveFieldName.call(this, 'person', field.fieldName);
-									
-									if (fieldResolution.fieldExists || fieldResolution.fallbackUsed) {
-										const resolvedField = fieldResolution.resolvedField!;
-										
-										if (resolvedField.includes('Link')) {
-											// For link fields
-											updateData[resolvedField] = { primaryLinkUrl: field.fieldValue };
-										} else {
-											// For text fields
-											updateData[resolvedField] = field.fieldValue;
-										}
-										
-										// Note: Field validation was skipped if fallback was used
-									} else {
-										throw new NodeOperationError(
-											this.getNode(),
-											`Custom field "${field.fieldName}" not found. Tried: ${fieldResolution.triedFields.join(', ')}.`
-										);
-									}
-								}
-							}
-						}
-
-						try {
-							const processedData = prepareRequestBody(updateData);
-							const response = await twentyApiRequest.call(this, 'PUT', `/people/${personId}`, processedData);
-							const updatedPerson = response.data?.updatePerson;
-							
-							responseData = {
-								updated: true,
-								person: updatedPerson,
-								originalPerson: findResult.person,
-								searchMethod: searchBy,
-								searchValue: searchValue,
-								recordId: updatedPerson?.id,
-								message: `Person updated: ${searchValue}`,
-							};
-						} catch (error) {
-							responseData = {
-								updated: false,
-								error: error.message,
-								searchMethod: searchBy,
-								searchValue: searchValue,
-								message: `Update failed: ${error.message}`,
-							};
-						}
+					case 'updateCompany':
+						responseData = await CompanyOperations.updateCompany(this, i);
 						break;
-					}
 
-					case 'updateCompany': {
-						const searchBy = this.getNodeParameter('updateSearchBy', i) as string;
-						const searchValue = this.getNodeParameter('updateSearchValue', i) as string;
-						const customFieldName = searchBy === 'customField' 
-							? this.getNodeParameter('updateCustomFieldName', i) as string 
-							: undefined;
-						const additionalFields = this.getNodeParameter('additionalFields', i, {}) as any;
-
-						// First find the company using unified search
-						const findResult = await findCompanyUnified.call(
-							this, 
-							searchBy, 
-							searchValue, 
-							customFieldName,
-							false
-						);
-						
-						if (!findResult.found || findResult.confidence < 0.8) {
-							responseData = {
-								updated: false,
-								error: findResult.found 
-									? 'No exact match found, update cancelled' 
-									: 'Company not found',
-								searchMethod: searchBy,
-								searchValue: searchValue,
-								confidence: findResult.confidence || 0,
-								message: `Company not found or low confidence match with ${searchBy}: ${searchValue}`,
-							};
-							break;
-						}
-
-						const companyId = findResult.company.id;
-						const updateData: IDataObject = {};
-
-						if (additionalFields.name !== undefined) updateData.name = additionalFields.name;
-						
-						if (additionalFields.domain) {
-							updateData.domainName = { 
-								primaryLinkUrl: additionalFields.domain.startsWith('http') 
-									? additionalFields.domain 
-									: `https://${additionalFields.domain}` 
-							};
-						}
-						
-						if (additionalFields.employees !== undefined) updateData.employees = additionalFields.employees;
-
-						// Handle address updates
-						if (additionalFields.addressStreet1 !== undefined || additionalFields.addressCity !== undefined || 
-							additionalFields.addressPostcode !== undefined || additionalFields.addressState !== undefined || 
-							additionalFields.addressCountry !== undefined) {
-							updateData.address = {
-								addressStreet1: additionalFields.addressStreet1 || '',
-								addressStreet2: additionalFields.addressStreet2 || '',
-								addressCity: additionalFields.addressCity || '',
-								addressPostcode: additionalFields.addressPostcode || '',
-								addressState: additionalFields.addressState || '',
-								addressCountry: additionalFields.addressCountry || '',
-							};
-						}
-
-						// Handle revenue updates
-						if (additionalFields.annualRecurringRevenueMicros !== undefined || additionalFields.currencyCode !== undefined) {
-							updateData.annualRecurringRevenue = {
-								amountMicros: additionalFields.annualRecurringRevenueMicros || 0,
-								currencyCode: additionalFields.currencyCode || 'USD',
-							};
-						}
-
-						if (additionalFields.companyLinkedinUrl) {
-							updateData.linkedinLink = { primaryLinkUrl: additionalFields.companyLinkedinUrl };
-						}
-						
-						if (additionalFields.companyXUrl) {
-							updateData.xLink = { primaryLinkUrl: additionalFields.companyXUrl };
-						}
-
-						// Handle custom fields
-						const customFields = this.getNodeParameter('customFields', i, {}) as any;
-						if (customFields && customFields.customField && customFields.customField.length > 0) {
-							for (const field of customFields.customField) {
-								if (field.fieldName && field.fieldValue !== undefined) {
-									// Resolve field name with fallback
-									const fieldResolution = await resolveFieldName.call(this, 'company', field.fieldName);
-									
-									if (fieldResolution.fieldExists || fieldResolution.fallbackUsed) {
-										const resolvedField = fieldResolution.resolvedField!;
-										
-										if (resolvedField.includes('Link')) {
-											// For link fields
-											updateData[resolvedField] = { primaryLinkUrl: field.fieldValue };
-										} else {
-											// For text fields
-											updateData[resolvedField] = field.fieldValue;
-										}
-										
-										// Note: Field validation was skipped if fallback was used
-									} else {
-										throw new NodeOperationError(
-											this.getNode(),
-											`Custom field "${field.fieldName}" not found. Tried: ${fieldResolution.triedFields.join(', ')}.`
-										);
-									}
-								}
-							}
-						}
-
-						try {
-							const processedData = prepareRequestBody(updateData);
-							const response = await twentyApiRequest.call(this, 'PUT', `/companies/${companyId}`, processedData);
-							const updatedCompany = response.data?.updateCompany;
-							
-							responseData = {
-								updated: true,
-								company: updatedCompany,
-								originalCompany: findResult.company,
-								searchMethod: searchBy,
-								searchValue: searchValue,
-								confidence: findResult.confidence,
-								recordId: updatedCompany?.id,
-								message: `Company updated: ${searchValue}`,
-							};
-						} catch (error) {
-							responseData = {
-								updated: false,
-								error: error.message,
-								searchMethod: searchBy,
-								searchValue: searchValue,
-								message: `Update failed: ${error.message}`,
-							};
-						}
+					case 'deleteCompany':
+						responseData = await CompanyOperations.deleteCompany(this, i);
 						break;
-					}
 
-
-					case 'addContact': {
-						const firstName = this.getNodeParameter('firstName', i) as string;
-						const additionalFields = this.getNodeParameter('additionalFields', i, {}) as any;
-						const email = this.getNodeParameter('emailAddress', i, '') as string;
-
-						const contactData: IDataObject = {
-							name: { firstName, lastName: additionalFields.lastName || '' },
-						};
-
-						if (email) contactData.email = email;
-						if (additionalFields.phone) contactData.phone = additionalFields.phone;
-						if (additionalFields.position) contactData.position = additionalFields.position;
-						if (additionalFields.city) contactData.city = additionalFields.city;
-						if (additionalFields.companyId) contactData.companyId = additionalFields.companyId;
-
-						const result = await findOrCreateContact.call(this, contactData);
-						
-						responseData = {
-							created: result.created,
-							action: result.action,
-							person: result.person,
-							confidence: result.confidence,
-							recordId: result.person?.id,
-							message: result.created 
-								? `Contact created: ${firstName} ${additionalFields.lastName || ''}`
-								: `Contact already exists: ${firstName} ${additionalFields.lastName || ''}`,
-						};
+					// OPPORTUNITY OPERATIONS
+					case 'findOpportunity':
+						responseData = await OpportunityOperations.findOpportunity(this, i);
 						break;
-					}
 
-					case 'addCompany': {
-						const companyName = this.getNodeParameter('companyName', i) as string;
-						const additionalFields = this.getNodeParameter('additionalFields', i, {}) as any;
-
-						const companyData: IDataObject = { name: companyName };
-						if (additionalFields.domain) companyData.domain = additionalFields.domain;
-						if (additionalFields.address) companyData.address = additionalFields.address;
-						if (additionalFields.employees) companyData.employees = additionalFields.employees;
-
-						const result = await findOrCreateCompany.call(this, companyData);
-						
-						responseData = {
-							created: result.created,
-							action: result.action,
-							company: result.company,
-							confidence: result.confidence,
-							recordId: result.company?.id,
-							message: result.created 
-								? `Company created: ${companyName}`
-								: `Company already exists: ${companyName}`,
-						};
+					case 'createOpportunity':
+						responseData = await OpportunityOperations.createOpportunity(this, i);
 						break;
-					}
 
-					case 'findOrCreateContact': {
-						const email = this.getNodeParameter('emailAddress', i) as string;
-						const additionalFields = this.getNodeParameter('additionalFields', i, {}) as any;
-
-						const contactData: IDataObject = { email };
-						if (additionalFields.firstName || additionalFields.lastName) {
-							contactData.name = { 
-								firstName: additionalFields.firstName || '', 
-								lastName: additionalFields.lastName || '' 
-							};
-						}
-						if (additionalFields.phone) contactData.phone = additionalFields.phone;
-						if (additionalFields.position) contactData.position = additionalFields.position;
-						if (additionalFields.city) contactData.city = additionalFields.city;
-						if (additionalFields.companyId) contactData.companyId = additionalFields.companyId;
-
-						const result = await findOrCreateContact.call(this, contactData);
-						
-						responseData = {
-							action: result.action,
-							person: result.person,
-							confidence: result.confidence,
-							created: result.created,
-							recordId: result.person?.id,
-							message: result.created 
-								? `Contact created for: ${email}`
-								: `Contact found for: ${email}`,
-						};
+					case 'updateOpportunity':
+						responseData = await OpportunityOperations.updateOpportunity(this, i);
 						break;
-					}
 
-					case 'findOrCreateCompany': {
-						const companyName = this.getNodeParameter('companyName', i, '') as string;
-						const additionalFields = this.getNodeParameter('additionalFields', i, {}) as any;
-
-						if (!companyName && !additionalFields.domain) {
-							throw new NodeOperationError(this.getNode(), 'Either company name or domain must be provided');
-						}
-
-						const companyData: IDataObject = {};
-						if (companyName) companyData.name = companyName;
-						if (additionalFields.domain) companyData.domain = additionalFields.domain;
-						if (additionalFields.address) companyData.address = additionalFields.address;
-						if (additionalFields.employees) companyData.employees = additionalFields.employees;
-
-						const result = await findOrCreateCompany.call(this, companyData);
-						
-						responseData = {
-							action: result.action,
-							company: result.company,
-							confidence: result.confidence,
-							created: result.created,
-							foundBy: result.foundBy || null,
-							recordId: result.company?.id,
-							message: result.created 
-								? `Company created: ${companyName || additionalFields.domain}`
-								: `Company found: ${companyName || additionalFields.domain}`,
-						};
+					case 'deleteOpportunity':
+						responseData = await OpportunityOperations.deleteOpportunity(this, i);
 						break;
-					}
 
-					case 'updateContactByEmail': {
-						const email = this.getNodeParameter('emailAddress', i) as string;
-						const additionalFields = this.getNodeParameter('additionalFields', i, {}) as any;
-
-						const updateData: IDataObject = {};
-						if (additionalFields.firstName || additionalFields.lastName) {
-							updateData.name = { 
-								firstName: additionalFields.firstName || '', 
-								lastName: additionalFields.lastName || '' 
-							};
-						}
-						if (additionalFields.phone) updateData.phone = { primaryPhoneNumber: additionalFields.phone };
-						if (additionalFields.position) updateData.position = additionalFields.position;
-						if (additionalFields.city) updateData.city = additionalFields.city;
-
-						const result = await updateContactByEmail.call(this, email, updateData);
-						
-						responseData = {
-							updated: result.updated,
-							person: result.person,
-							originalPerson: result.originalPerson,
-							error: result.error || null,
-							recordId: result.person?.id,
-							message: result.updated 
-								? `Contact updated: ${email}`
-								: `Update failed: ${result.error}`,
-						};
+					case 'listOpportunities':
+						responseData = await OpportunityOperations.listOpportunities(this, i);
 						break;
-					}
 
-					case 'updateCompanyByName': {
-						const companyName = this.getNodeParameter('companyName', i) as string;
-						const additionalFields = this.getNodeParameter('additionalFields', i, {}) as any;
-
-						const updateData: IDataObject = {};
-						if (additionalFields.domain) {
-							updateData.domainName = { 
-								primaryLinkUrl: additionalFields.domain.startsWith('http') 
-									? additionalFields.domain 
-									: `https://${additionalFields.domain}` 
-							};
-						}
-						if (additionalFields.address) updateData.address = additionalFields.address;
-						if (additionalFields.employees !== undefined) updateData.employees = additionalFields.employees;
-
-						const result = await updateCompanyByName.call(this, companyName, updateData);
-						
-						responseData = {
-							updated: result.updated,
-							company: result.company,
-							originalCompany: result.originalCompany,
-							confidence: result.confidence || 0,
-							error: result.error || null,
-							recordId: result.company?.id,
-							message: result.updated 
-								? `Company updated: ${companyName}`
-								: `Update failed: ${result.error}`,
-						};
+					// LEGACY OPERATIONS (deprecated but maintained for backward compatibility)
+					case 'addContact':
+						responseData = await PersonOperations.createPerson(this, i);
 						break;
-					}
 
-
-					case 'deleteContactByEmail': {
-						const email = this.getNodeParameter('emailAddress', i) as string;
-
-						// First find the contact using unified search
-						const findResult = await findPersonUnified.call(this, 'email', email, undefined, false);
-						if (!findResult.found) {
-							responseData = {
-								deleted: false,
-								error: 'Contact not found',
-								message: `Contact not found: ${email}`,
-							};
-							break;
-						}
-
-						const personId = findResult.person.id;
-
-						try {
-							await twentyApiRequest.call(this, 'DELETE', `/people/${personId}`);
-							responseData = {
-								deleted: true,
-								personId,
-								message: `Contact deleted: ${email}`,
-							};
-						} catch (error) {
-							responseData = {
-								deleted: false,
-								error: error.message,
-								message: `Delete failed: ${error.message}`,
-							};
-						}
+					case 'addCompany':
+						responseData = await CompanyOperations.createCompany(this, i);
 						break;
-					}
 
-					case 'deleteCompanyByName': {
-						const companyName = this.getNodeParameter('companyName', i) as string;
-
-						// First find the company using unified search
-						const findResult = await findCompanyUnified.call(this, 'name', companyName, undefined, false);
-						if (!findResult.found || findResult.confidence < 0.9) {
-							responseData = {
-								deleted: false,
-								error: findResult.found 
-									? 'No exact match found, delete cancelled' 
-									: 'Company not found',
-								message: `Company not found or no exact match: ${companyName}`,
-							};
-							break;
-						}
-
-						const companyId = findResult.company.id;
-
-						try {
-							await twentyApiRequest.call(this, 'DELETE', `/companies/${companyId}`);
-							responseData = {
-								deleted: true,
-								companyId,
-								confidence: findResult.confidence,
-								message: `Company deleted: ${companyName}`,
-							};
-						} catch (error) {
-							responseData = {
-								deleted: false,
-								error: error.message,
-								message: `Delete failed: ${error.message}`,
-							};
-						}
+					case 'findOrCreateContact':
+						responseData = await PersonOperations.createPerson(this, i);
 						break;
-					}
+
+					case 'findOrCreateCompany':
+						responseData = await CompanyOperations.createCompany(this, i);
+						break;
+
+					case 'updateContactByEmail':
+						responseData = await PersonOperations.updatePerson(this, i);
+						break;
+
+					case 'updateCompanyByName':
+						responseData = await CompanyOperations.updateCompany(this, i);
+						break;
+
+					case 'deleteContactByEmail':
+						responseData = await PersonOperations.deletePerson(this, i);
+						break;
+
+					case 'deleteCompanyByName':
+						responseData = await CompanyOperations.deleteCompany(this, i);
+						break;
 
 					default:
 						throw new NodeOperationError(this.getNode(), `Unknown use case: ${useCase}`);

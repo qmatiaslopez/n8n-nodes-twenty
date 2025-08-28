@@ -1,28 +1,33 @@
 # n8n-nodes-twenty-fork
 
-> **Community Fork**: This is a community fork of [n8n-nodes-twenty](https://github.com/shodgson/n8n-nodes-twenty) by S Hodgson, updated for **Twenty CRM v1.4.0+ compatibility** by Matias Lopez.
+> **v1.0.0 Major Update**: Complete migration from REST to GraphQL! This version now uses Twenty's native GraphQL API for better performance and reliability.
 
-This is an n8n community node. It lets you use **Twenty CRM** in your n8n workflows with full support for the latest Twenty v1.4.0+ API.
+This is an n8n community node that lets you use **Twenty CRM** in your n8n workflows. Originally forked from [n8n-nodes-twenty](https://github.com/shodgson/n8n-nodes-twenty) by S Hodgson, completely rewritten for GraphQL by Matias Lopez.
 
-[Twenty CRM](https://twenty.com/) is an open-source CRM (customer relationship management) tool that is under rapid development. This fork is specifically compatible with **Twenty v1.4.0 and later** - it will NOT work with earlier versions.
+[Twenty CRM](https://twenty.com/) is an open-source CRM (customer relationship management) tool. This node is compatible with **Twenty v1.4.0 and later**.
 
-## Fork Highlights
+## 🚀 Version 1.0.0 Highlights
 
-- **Twenty v1.4.0+ Compatible**: Updated API endpoints from `/rest/*` to `/rest/core/*`
-- **Metadata API Support**: Access to `/rest/metadata/*` endpoints
-- **Enhanced Filtering**: Advanced operators (`and`, `or`, `not`)
-- **Improved Pagination**: Cursor-based with `starting_after`, `ending_before`
-- **Breaking Change**: NOT compatible with Twenty versions < v1.4.0
+- **🔄 Complete GraphQL Migration**: All operations now use Twenty's primary GraphQL API
+- **⚡ Better Performance**: Single GraphQL requests vs multiple REST calls
+- **🛡️ Improved Reliability**: Uses Twenty's main API (same as their frontend)
+- **🔮 Future-Proof**: Aligned with Twenty's development direction
+- **✨ Zero Breaking Changes**: Same n8n interface, seamless upgrade
 
-### Original vs Fork
+### API Evolution
 
-| Feature | Original (v0.0.5) | This Fork (v0.1.0) |
-|---------|-------------------|---------------------|
-| Twenty Compatibility | v1.0.3 | v1.4.0+ |
-| API Endpoints | `/rest/*` | `/rest/core/*` |
-| Metadata API | No | Yes |
-| Advanced Filtering | Basic | Enhanced |
-| Cursor Pagination | No | Yes |
+| Version | API Type | Endpoint | Status |
+|---------|----------|----------|---------|
+| v0.x | REST | `/rest/core/*` | Legacy |
+| **v1.0.0** | **GraphQL** | **`/graphql`** | **✅ Current** |
+
+### What's New in v1.0.0
+
+- 🔄 **GraphQL-First**: All CRUD operations use GraphQL mutations and queries
+- 🎯 **Better Error Handling**: GraphQL provides more detailed error messages  
+- 📊 **Optimized Queries**: Fetch exactly the data you need
+- 🔒 **Type Safety**: Full TypeScript support with GraphQL schema validation
+- 🚀 **Performance**: Reduced network overhead with single requests
 
 [n8n](https://n8n.io/) is a [fair-code licensed](https://docs.n8n.io/reference/license/) workflow automation platform.
 
@@ -118,6 +123,19 @@ Compatible and tested with Twenty v1.4.0 and n8n v1.91.3+.
 
 ### Fork Version History
 
+#### v1.0.0 🚀 (Major GraphQL Migration)
+**Complete migration from REST to GraphQL API**
+- ✅ **GraphQL-First**: All operations use Twenty's primary GraphQL API
+- ✅ **Zero Breaking Changes**: Same n8n interface, seamless upgrade
+- ✅ **Better Performance**: Single GraphQL requests vs multiple REST calls  
+- ✅ **Improved Reliability**: Uses Twenty's main API (same as frontend)
+- ✅ **Future-Proof**: Aligned with Twenty's development direction
+- ✅ **Enhanced Error Handling**: Better GraphQL error messages
+- ✅ **Type Safety**: Full TypeScript support with schema validation
+
+#### v0.6.9 (REST Era - Final)
+Added comprehensive field resolution system with fallback mechanisms and enhanced custom field support with improved error handling for unknown fields.
+
 #### v0.1.0 (Fork by Matias Lopez)
 **BREAKING CHANGE:** Forked for Twenty v1.4.0 compatibility
 - Updated API endpoints from `/rest/*` to `/rest/core/*`
@@ -150,12 +168,13 @@ Initial release
 - Previous versions relied on similar tools from [ivov](https://github.com/ivov) and [feelgood-interface](https://github.com/feelgood-interface)
 
 ### Fork Maintainer
-- **Matias Lopez** - v1.4.0 compatibility updates and enhancements
+- **Matias Lopez** - v1.4.0 compatibility and v1.0.0 GraphQL migration
 
 ### What This Fork Adds
 This fork builds upon S Hodgson's excellent foundation by adding:
-- Updated API endpoints for Twenty v1.4.0+
-- Metadata API integration
-- Enhanced filtering and pagination
-- Modern OpenAPI schema integration
+- **v1.0.0**: Complete migration to Twenty's GraphQL API
+- **v0.x**: Updated API endpoints for Twenty v1.4.0+
+- **v0.x**: Metadata API integration  
+- **v0.x**: Enhanced filtering and pagination
+- **v0.x**: Modern OpenAPI schema integration
 
