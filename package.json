@@ -1,13 +1,16 @@
 {
   "name": "n8n-nodes-twenty-fork",
-  "version": "1.3.0",
-  "description": "n8n node for Twenty CRM with full GraphQL API integration. Complete CRUD operations for People, Companies, and Opportunities. Migration from REST to GraphQL for better reliability and performance. All operations use Twenty's primary GraphQL endpoint.",
+  "version": "2.0.0",
+  "description": "n8n nodes for Twenty CRM with specialized nodes for better UX. Complete CRUD operations for People, Companies, Opportunities, and Notes. Full GraphQL API integration with smart field resolution and unified search capabilities.",
   "keywords": [
     "n8n-community-node-package",
     "twenty-crm",
     "crm",
     "graphql",
+    "people",
+    "companies",
     "opportunities",
+    "notes",
     "sales-pipeline",
     "twenty-fork",
     "twenty-v1.4.0",
@@ -17,7 +20,9 @@
     "custom-fields",
     "field-resolution",
     "automation",
-    "workflow"
+    "workflow",
+    "specialized-nodes",
+    "modular"
   ],
   "license": "MIT",
   "publishConfig": {
