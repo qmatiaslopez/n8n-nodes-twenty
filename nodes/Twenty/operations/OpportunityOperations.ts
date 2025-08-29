@@ -11,17 +11,22 @@ import {
 
 export class OpportunityOperations {
 	/**
-	 * Find opportunity by name or ID
+	 * Find opportunity by name or custom field
 	 */
 	static async findOpportunity(context: IExecuteFunctions, i: number): Promise<IDataObject> {
 		const searchBy = context.getNodeParameter('searchBy', i) as string;
 		const searchValue = context.getNodeParameter('searchValue', i) as string;
+		
+		let additionalFields: IDataObject = {};
+		if (searchBy === 'customField') {
+			additionalFields.customFieldPath = context.getNodeParameter('customFieldPath', i) as string;
+		}
 
 		const result = await findOpportunityUnifiedGraphQL.call(
 			context,
 			searchBy,
 			searchValue,
-			undefined,
+			additionalFields,
 			true
 		);
 
@@ -191,13 +196,18 @@ export class OpportunityOperations {
 	static async deleteOpportunity(context: IExecuteFunctions, i: number): Promise<IDataObject> {
 		const searchBy = context.getNodeParameter('updateSearchBy', i) as string;
 		const searchValue = context.getNodeParameter('updateSearchValue', i) as string;
+		
+		let additionalFields: IDataObject = {};
+		if (searchBy === 'customField') {
+			additionalFields.customFieldPath = context.getNodeParameter('updateCustomFieldPath', i) as string;
+		}
 
 		// First find the opportunity using unified search
 		const findResult = await findOpportunityUnifiedGraphQL.call(
 			context,
 			searchBy,
 			searchValue,
-			undefined,
+			additionalFields,
 			false
 		);
 

@@ -119,7 +119,7 @@ export class Twenty implements INodeType {
 				options: [
 					{ name: 'Email', value: 'email' },
 					{ name: 'Phone', value: 'phone' },
-					{ name: 'LinkedIn', value: 'linkedin' },
+					{ name: 'Custom Field', value: 'customField' },
 				],
 				displayOptions: {
 					show: {
@@ -137,6 +137,7 @@ export class Twenty implements INodeType {
 				type: 'options',
 				options: [
 					{ name: 'Name', value: 'name' },
+					{ name: 'Custom Field', value: 'customField' },
 				],
 				displayOptions: {
 					show: {
@@ -154,7 +155,7 @@ export class Twenty implements INodeType {
 				type: 'options',
 				options: [
 					{ name: 'Name', value: 'name' },
-					{ name: 'ID/UUID', value: 'id' },
+					{ name: 'Custom Field', value: 'customField' },
 				],
 				displayOptions: {
 					show: {
@@ -165,6 +166,23 @@ export class Twenty implements INodeType {
 				description: 'How to search for the opportunity',
 			},
 
+
+			// Custom Field Path for find operations
+			{
+				displayName: 'Field Path',
+				name: 'customFieldPath',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						searchBy: ['customField'],
+						useCase: ['findPerson', 'findCompany', 'findOpportunity'],
+					},
+				},
+				default: '',
+				placeholder: 'linkedinLink.primaryLinkUrl or jobTitle',
+				description: 'Field name or nested path (e.g., emails.primaryEmail, linkedinLink.primaryLinkUrl, jobTitle)',
+			},
 
 			// Search value (unified for all search operations)
 			{
@@ -221,7 +239,7 @@ export class Twenty implements INodeType {
 				options: [
 					{ name: 'Email', value: 'email' },
 					{ name: 'Phone', value: 'phone' },
-					{ name: 'LinkedIn', value: 'linkedin' },
+					{ name: 'Custom Field', value: 'customField' },
 				],
 				displayOptions: {
 					show: {
@@ -239,6 +257,7 @@ export class Twenty implements INodeType {
 				type: 'options',
 				options: [
 					{ name: 'Name', value: 'name' },
+					{ name: 'Custom Field', value: 'customField' },
 				],
 				displayOptions: {
 					show: {
@@ -256,7 +275,7 @@ export class Twenty implements INodeType {
 				type: 'options',
 				options: [
 					{ name: 'Name', value: 'name' },
-					{ name: 'ID/UUID', value: 'id' },
+					{ name: 'Custom Field', value: 'customField' },
 				],
 				displayOptions: {
 					show: {
@@ -267,6 +286,23 @@ export class Twenty implements INodeType {
 				description: 'How to search for the opportunity',
 			},
 
+
+			// Custom Field Path for update/delete operations
+			{
+				displayName: 'Field Path',
+				name: 'updateCustomFieldPath',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						updateSearchBy: ['customField'],
+						useCase: ['deletePerson', 'updatePerson', 'deleteCompany', 'updateCompany', 'deleteOpportunity', 'updateOpportunity'],
+					},
+				},
+				default: '',
+				placeholder: 'linkedinLink.primaryLinkUrl or jobTitle',
+				description: 'Field name or nested path (e.g., emails.primaryEmail, linkedinLink.primaryLinkUrl, jobTitle)',
+			},
 
 			// Search value (for delete/update operations)
 			{

@@ -8,6 +8,100 @@ import {
 } from 'n8n-workflow';
 // Simple UUID v4 generator without requiring crypto module
 
+// Custom Field Filter Builder
+export function buildCustomFieldFilter(
+	fieldPath: string, 
+	searchValue: string
+): IDataObject {
+	const parts = fieldPath.split('.');
+	
+	if (parts.length === 1) {
+		// Campo directo: jobTitle -> { jobTitle: { eq: "value" } }
+		return { [parts[0]]: { eq: searchValue } };
+	} else if (parts.length === 2) {
+		// Campo anidado: emails.primaryEmail -> { emails: { primaryEmail: { eq: "value" } } }
+		const [parentField, childField] = parts;
+		return { [parentField]: { [childField]: { eq: searchValue } } };
+	} else {
+		// Para campos más profundamente anidados (raro pero posible)
+		let filter = { eq: searchValue };
+		for (let i = parts.length - 2; i >= 0; i--) {
+			filter = { [parts[i + 1]]: filter } as any;
+		}
+		return { [parts[0]]: filter };
+	}
+}
+
+// Custom Field Validation Function
+export async function validateCustomFieldPath(
+	this: IExecuteFunctions,
+	objectType: 'Person' | 'Company' | 'Opportunity',
+	fieldPath: string
+): Promise<{ valid: boolean; error?: string }> {
+	try {
+		const parts = fieldPath.split('.');
+		
+		// Use GraphQL introspection to get field information
+		const introspectionQuery = `
+			query ValidateField {
+				__schema {
+					types {
+						name
+						fields {
+							name
+							type {
+								name
+								fields {
+									name
+								}
+							}
+						}
+					}
+				}
+			}
+		`;
+		
+		const response = await twentyGraphQLRequest.call(this, introspectionQuery);
+		const types = response.data?.__schema?.types || [];
+		const targetType = types.find((type: any) => type.name === objectType);
+		
+		if (!targetType?.fields) {
+			return { valid: false, error: `Type "${objectType}" not found in schema` };
+		}
+		
+		const fields = targetType.fields;
+		
+		if (parts.length === 1) {
+			// Validar campo directo
+			const fieldExists = fields.some((f: any) => f.name === parts[0]);
+			return { 
+				valid: fieldExists, 
+				error: fieldExists ? undefined : `Field "${parts[0]}" not found in ${objectType}` 
+			};
+		} else if (parts.length === 2) {
+			// Validar campo anidado
+			const parentField = fields.find((f: any) => f.name === parts[0]);
+			if (!parentField) {
+				return { valid: false, error: `Parent field "${parts[0]}" not found in ${objectType}` };
+			}
+			
+			const childFields = parentField.type?.fields || [];
+			const childExists = childFields.some((f: any) => f.name === parts[1]);
+			return { 
+				valid: childExists, 
+				error: childExists ? undefined : `Child field "${parts[1]}" not found in "${parts[0]}"` 
+			};
+		} else {
+			// Para campos más profundos, usar validación básica
+			return { valid: true }; // Aceptar y dejar que GraphQL valide
+		}
+		
+	} catch (error) {
+		// En caso de error de introspección, permitir el campo y dejar que GraphQL valide
+		return { valid: true };
+	}
+}
+
 // GraphQL Infrastructure Functions
 export async function twentyGraphQLRequest(
 	this: IExecuteFunctions,
@@ -1029,12 +1123,14 @@ export async function findPersonUnifiedGraphQL(
 					}
 				};
 				break;
-			case 'linkedin':
-				filterClause = {
-					linkedinLink: {
-						primaryLinkUrl: { eq: searchValue }
-					}
-				};
+			case 'customField':
+				if (!customFieldName) {
+					throw new NodeOperationError(
+						this.getNode(),
+						'Custom field name is required when using customField search'
+					);
+				}
+				filterClause = buildCustomFieldFilter(customFieldName, searchValue);
 				break;
 			default:
 				throw new NodeOperationError(
@@ -1172,6 +1268,15 @@ export async function findCompanyUnifiedGraphQL(
 				filterClause = {
 					name: { ilike: `%${searchValue}%` }
 				};
+				break;
+			case 'customField':
+				if (!customFieldName) {
+					throw new NodeOperationError(
+						this.getNode(),
+						'Custom field name is required when using customField search'
+					);
+				}
+				filterClause = buildCustomFieldFilter(customFieldName, searchValue);
 				break;
 			default:
 				throw new NodeOperationError(
@@ -1350,9 +1455,8 @@ export async function findOpportunityUnifiedGraphQL(
 			case 'name':
 				confidence = searchValue ? (searchValue.length > 2 ? 0.95 : 0.8) : 0.5;
 				break;
-			case 'id':
-			case 'uuid':
-				confidence = 1.0;
+			case 'customfield':
+				confidence = 0.9; // Alta confianza para campos personalizados
 				break;
 			default:
 				throw new NodeOperationError(
@@ -1409,7 +1513,29 @@ export async function findOpportunityUnifiedGraphQL(
 			}
 		`;
 
-		const variables = { filter: { [searchBy === 'id' || searchBy === 'uuid' ? 'id' : searchBy]: { [searchBy === 'name' ? 'ilike' : 'eq']: searchValue } } };
+		let filterClause: IDataObject = {};
+		
+		switch (searchBy.toLowerCase()) {
+			case 'name':
+				filterClause = { name: { ilike: searchValue } };
+				break;
+			case 'customfield':
+				if (!additionalFields?.customFieldPath) {
+					throw new NodeOperationError(
+						this.getNode(),
+						'Custom field path is required when using customField search'
+					);
+				}
+				filterClause = buildCustomFieldFilter(additionalFields.customFieldPath as string, searchValue);
+				break;
+			default:
+				throw new NodeOperationError(
+					this.getNode(),
+					`Unsupported search method for opportunity: ${searchBy}`
+				);
+		}
+		
+		const variables = { filter: filterClause };
 		const response = await twentyGraphQLRequest.call(this, query, variables);
 
 		const opportunities = response.data?.opportunities?.edges || [];

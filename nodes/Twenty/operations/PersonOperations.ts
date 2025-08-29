@@ -11,17 +11,22 @@ import {
 
 export class PersonOperations {
 	/**
-	 * Find person by email, phone, or LinkedIn
+	 * Find person by email, phone, or custom field
 	 */
 	static async findPerson(context: IExecuteFunctions, i: number): Promise<IDataObject> {
 		const searchBy = context.getNodeParameter('searchBy', i) as string;
 		const searchValue = context.getNodeParameter('searchValue', i) as string;
+		
+		let customFieldPath: string | undefined;
+		if (searchBy === 'customField') {
+			customFieldPath = context.getNodeParameter('customFieldPath', i) as string;
+		}
 
 		const result = await findPersonUnifiedGraphQL.call(
 			context,
 			searchBy,
 			searchValue,
-			undefined,
+			customFieldPath,
 			true
 		);
 
@@ -200,13 +205,18 @@ export class PersonOperations {
 	static async deletePerson(context: IExecuteFunctions, i: number): Promise<IDataObject> {
 		const searchBy = context.getNodeParameter('updateSearchBy', i) as string;
 		const searchValue = context.getNodeParameter('updateSearchValue', i) as string;
+		
+		let customFieldPath: string | undefined;
+		if (searchBy === 'customField') {
+			customFieldPath = context.getNodeParameter('updateCustomFieldPath', i) as string;
+		}
 
 		// First find the person using unified GraphQL search
 		const findResult = await findPersonUnifiedGraphQL.call(
 			context,
 			searchBy,
 			searchValue,
-			undefined,
+			customFieldPath,
 			false
 		);
 

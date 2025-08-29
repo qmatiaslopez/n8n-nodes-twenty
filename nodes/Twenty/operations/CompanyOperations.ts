@@ -10,17 +10,22 @@ import {
 
 export class CompanyOperations {
 	/**
-	 * Find company by name
+	 * Find company by name or custom field
 	 */
 	static async findCompany(context: IExecuteFunctions, i: number): Promise<IDataObject> {
 		const searchBy = context.getNodeParameter('searchBy', i) as string;
 		const searchValue = context.getNodeParameter('searchValue', i) as string;
+		
+		let customFieldPath: string | undefined;
+		if (searchBy === 'customField') {
+			customFieldPath = context.getNodeParameter('customFieldPath', i) as string;
+		}
 
 		const result = await findCompanyUnifiedGraphQL.call(
 			context,
 			searchBy,
 			searchValue,
-			undefined,
+			customFieldPath,
 			true
 		);
 
@@ -254,13 +259,18 @@ export class CompanyOperations {
 	static async deleteCompany(context: IExecuteFunctions, i: number): Promise<IDataObject> {
 		const searchBy = context.getNodeParameter('updateSearchBy', i) as string;
 		const searchValue = context.getNodeParameter('updateSearchValue', i) as string;
+		
+		let customFieldPath: string | undefined;
+		if (searchBy === 'customField') {
+			customFieldPath = context.getNodeParameter('updateCustomFieldPath', i) as string;
+		}
 
 		// First find the company using unified GraphQL search
 		const findResult = await findCompanyUnifiedGraphQL.call(
 			context,
 			searchBy,
 			searchValue,
-			undefined,
+			customFieldPath,
 			false
 		);
 
