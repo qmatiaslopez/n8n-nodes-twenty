@@ -2310,3 +2310,445 @@ export async function findWorkspaceMemberByEmailGraphQL(
 		};
 	}
 }
+
+// ============================================================================
+// NOTE OPERATIONS - GraphQL
+// ============================================================================
+
+export async function createNoteGraphQL(
+	this: IExecuteFunctions,
+	noteData: IDataObject
+): Promise<any> {
+	try {
+		const mutation = `
+			mutation CreateNote($data: NoteCreateInput!) {
+				createNote(data: $data) {
+					id
+					title
+					body
+					bodyV2 {
+						blocknote
+						markdown
+					}
+					position
+					createdAt
+					updatedAt
+					createdBy {
+						source
+						name
+					}
+				}
+			}
+		`;
+
+		const response = await twentyGraphQLRequest.call(this, mutation, { data: noteData });
+		
+		if (!response.data?.createNote) {
+			throw new NodeOperationError(
+				this.getNode(),
+				'Failed to create note - no data returned from GraphQL mutation'
+			);
+		}
+
+		return response.data.createNote;
+
+	} catch (error) {
+		throw new NodeOperationError(
+			this.getNode(),
+			`Failed to create note: ${error.message}`
+		);
+	}
+}
+
+export async function createNoteTargetGraphQL(
+	this: IExecuteFunctions,
+	targetData: IDataObject
+): Promise<any> {
+	try {
+		const mutation = `
+			mutation CreateNoteTarget($data: NoteTargetCreateInput!) {
+				createNoteTarget(data: $data) {
+					id
+					noteId
+					personId
+					companyId
+					opportunityId
+					createdAt
+					updatedAt
+					note {
+						id
+						title
+					}
+					person {
+						id
+						name {
+							firstName
+							lastName
+						}
+					}
+					company {
+						id
+						name
+					}
+					opportunity {
+						id
+						name
+					}
+				}
+			}
+		`;
+
+		const response = await twentyGraphQLRequest.call(this, mutation, { data: targetData });
+		
+		if (!response.data?.createNoteTarget) {
+			throw new NodeOperationError(
+				this.getNode(),
+				'Failed to create note target - no data returned from GraphQL mutation'
+			);
+		}
+
+		return response.data.createNoteTarget;
+
+	} catch (error) {
+		throw new NodeOperationError(
+			this.getNode(),
+			`Failed to create note target: ${error.message}`
+		);
+	}
+}
+
+export async function listNotesByPersonIdGraphQL(
+	this: IExecuteFunctions,
+	personId: string
+): Promise<{
+	notes: any[];
+	totalCount: number;
+	personId: string;
+}> {
+	try {
+		if (!isValidTwentyUuid(personId)) {
+			throw new NodeOperationError(
+				this.getNode(),
+				'Invalid person ID format. Must be a valid UUID.'
+			);
+		}
+
+		const query = `
+			query GetNotesByPersonId($filter: NoteFilterInput, $first: Int) {
+				notes(filter: $filter, first: $first) {
+					edges {
+						node {
+							id
+							title
+							body
+							bodyV2 {
+								blocknote
+								markdown
+							}
+							position
+							createdAt
+							updatedAt
+							createdBy {
+								source
+								name
+							}
+							noteTargets {
+								edges {
+									node {
+										id
+										person {
+											id
+											name {
+												firstName
+												lastName
+											}
+										}
+										company {
+											id
+											name
+										}
+										opportunity {
+											id
+											name
+										}
+									}
+								}
+							}
+						}
+					}
+					totalCount
+				}
+			}
+		`;
+
+		const variables = {
+			filter: {
+				noteTargets: {
+					some: {
+						personId: { eq: personId }
+					}
+				}
+			},
+			first: 100
+		};
+
+		const response = await twentyGraphQLRequest.call(this, query, variables);
+		const data = response.data?.notes;
+
+		if (!data) {
+			return {
+				notes: [],
+				totalCount: 0,
+				personId: personId
+			};
+		}
+
+		return {
+			notes: data.edges.map((edge: any) => edge.node),
+			totalCount: data.totalCount || 0,
+			personId: personId
+		};
+
+	} catch (error) {
+		throw new NodeOperationError(
+			this.getNode(),
+			`Failed to list notes by person ID: ${error.message}`
+		);
+	}
+}
+
+export async function listNotesByCompanyIdGraphQL(
+	this: IExecuteFunctions,
+	companyId: string
+): Promise<{
+	notes: any[];
+	totalCount: number;
+	companyId: string;
+}> {
+	try {
+		if (!isValidTwentyUuid(companyId)) {
+			throw new NodeOperationError(
+				this.getNode(),
+				'Invalid company ID format. Must be a valid UUID.'
+			);
+		}
+
+		const query = `
+			query GetNotesByCompanyId($filter: NoteFilterInput, $first: Int) {
+				notes(filter: $filter, first: $first) {
+					edges {
+						node {
+							id
+							title
+							body
+							bodyV2 {
+								blocknote
+								markdown
+							}
+							position
+							createdAt
+							updatedAt
+							createdBy {
+								source
+								name
+							}
+							noteTargets {
+								edges {
+									node {
+										id
+										person {
+											id
+											name {
+												firstName
+												lastName
+											}
+										}
+										company {
+											id
+											name
+										}
+										opportunity {
+											id
+											name
+										}
+									}
+								}
+							}
+						}
+					}
+					totalCount
+				}
+			}
+		`;
+
+		const variables = {
+			filter: {
+				noteTargets: {
+					some: {
+						companyId: { eq: companyId }
+					}
+				}
+			},
+			first: 100
+		};
+
+		const response = await twentyGraphQLRequest.call(this, query, variables);
+		const data = response.data?.notes;
+
+		if (!data) {
+			return {
+				notes: [],
+				totalCount: 0,
+				companyId: companyId
+			};
+		}
+
+		return {
+			notes: data.edges.map((edge: any) => edge.node),
+			totalCount: data.totalCount || 0,
+			companyId: companyId
+		};
+
+	} catch (error) {
+		throw new NodeOperationError(
+			this.getNode(),
+			`Failed to list notes by company ID: ${error.message}`
+		);
+	}
+}
+
+export async function updateNoteGraphQL(
+	this: IExecuteFunctions,
+	noteId: string,
+	updateData: IDataObject
+): Promise<{
+	updated: boolean;
+	note: any;
+	error?: string;
+}> {
+	try {
+		if (!isValidTwentyUuid(noteId)) {
+			return {
+				updated: false,
+				note: null,
+				error: 'Invalid note ID format. Must be a valid UUID.'
+			};
+		}
+
+		const mutation = `
+			mutation UpdateNote($id: UUID!, $data: NoteUpdateInput!) {
+				updateNote(id: $id, data: $data) {
+					id
+					title
+					body
+					bodyV2 {
+						blocknote
+						markdown
+					}
+					position
+					createdAt
+					updatedAt
+					createdBy {
+						source
+						name
+					}
+					noteTargets {
+						edges {
+							node {
+								id
+								person {
+									id
+									name {
+										firstName
+										lastName
+									}
+								}
+								company {
+									id
+									name
+								}
+								opportunity {
+									id
+									name
+								}
+							}
+						}
+					}
+				}
+			}
+		`;
+
+		const variables = { id: noteId, data: updateData };
+		const response = await twentyGraphQLRequest.call(this, mutation, variables);
+
+		if (!response.data?.updateNote) {
+			return {
+				updated: false,
+				note: null,
+				error: 'No data returned from update operation'
+			};
+		}
+
+		return {
+			updated: true,
+			note: response.data.updateNote
+		};
+
+	} catch (error) {
+		return {
+			updated: false,
+			note: null,
+			error: error.message
+		};
+	}
+}
+
+export async function deleteNoteGraphQL(
+	this: IExecuteFunctions,
+	noteId: string
+): Promise<{
+	deleted: boolean;
+	noteId: string;
+	error?: string;
+}> {
+	try {
+		if (!isValidTwentyUuid(noteId)) {
+			return {
+				deleted: false,
+				noteId,
+				error: 'Invalid note ID format. Must be a valid UUID.'
+			};
+		}
+
+		const mutation = `
+			mutation DeleteNote($id: UUID!) {
+				deleteNote(id: $id) {
+					id
+				}
+			}
+		`;
+
+		const variables = { id: noteId };
+		const response = await twentyGraphQLRequest.call(this, mutation, variables);
+
+		if (!response.data?.deleteNote) {
+			return {
+				deleted: false,
+				noteId,
+				error: 'No confirmation returned from delete operation'
+			};
+		}
+
+		return {
+			deleted: true,
+			noteId: response.data.deleteNote.id
+		};
+
+	} catch (error) {
+		return {
+			deleted: false,
+			noteId,
+			error: error.message
+		};
+	}
+}

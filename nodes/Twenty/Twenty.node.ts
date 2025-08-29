@@ -10,6 +10,7 @@ import {
 import { PersonOperations } from './operations/PersonOperations';
 import { CompanyOperations } from './operations/CompanyOperations';
 import { OpportunityOperations } from './operations/OpportunityOperations';
+import { NoteOperations } from './operations/NoteOperations';
 
 export class Twenty implements INodeType {
 	description: INodeTypeDescription = {
@@ -43,6 +44,11 @@ export class Twenty implements INodeType {
 						description: 'Create a new company',
 					},
 					{
+						name: 'Create Note',
+						value: 'createNote',
+						description: 'Create a new note and assign it to people or companies',
+					},
+					{
 						name: 'Create Opportunity',
 						value: 'createOpportunity',
 						description: 'Create a new opportunity',
@@ -56,6 +62,11 @@ export class Twenty implements INodeType {
 						name: 'Delete Company',
 						value: 'deleteCompany',
 						description: 'Delete a company',
+					},
+					{
+						name: 'Delete Note',
+						value: 'deleteNote',
+						description: 'Delete a note',
 					},
 					{
 						name: 'Delete Opportunity',
@@ -83,6 +94,11 @@ export class Twenty implements INodeType {
 						description: 'Search for a person using various criteria',
 					},
 					{
+						name: 'List Notes',
+						value: 'listNotes',
+						description: 'List notes assigned to a person or company',
+					},
+					{
 						name: 'List Opportunities',
 						value: 'listOpportunities',
 						description: 'List opportunities with optional filters',
@@ -98,6 +114,11 @@ export class Twenty implements INodeType {
 						description: 'Update an existing company',
 					},
 					{
+						name: 'Update Note',
+						value: 'updateNote',
+						description: 'Update an existing note',
+					},
+					{
 						name: 'Update Opportunity',
 						value: 'updateOpportunity',
 						description: 'Update an existing opportunity',
@@ -109,6 +130,200 @@ export class Twenty implements INodeType {
 					},
 				],
 				default: 'findPerson',
+			},
+
+			// ===== NOTE FIELDS =====
+
+			// Note title for create/update operations
+			{
+				displayName: 'Note Title',
+				name: 'noteTitle',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						useCase: ['createNote'],
+					},
+				},
+				default: '',
+				description: 'Title of the note',
+			},
+			{
+				displayName: 'Note Title',
+				name: 'noteTitle',
+				type: 'string',
+				displayOptions: {
+					show: {
+						useCase: ['updateNote'],
+					},
+				},
+				default: '',
+				description: 'New title for the note (leave empty to keep current)',
+			},
+
+			// Note body for create/update operations
+			{
+				displayName: 'Note Content',
+				name: 'noteBody',
+				type: 'string',
+				typeOptions: {
+					rows: 4,
+				},
+				required: true,
+				displayOptions: {
+					show: {
+						useCase: ['createNote'],
+					},
+				},
+				default: '',
+				description: 'Content/body of the note',
+			},
+			{
+				displayName: 'Note Content',
+				name: 'noteBody',
+				type: 'string',
+				typeOptions: {
+					rows: 4,
+				},
+				displayOptions: {
+					show: {
+						useCase: ['updateNote'],
+					},
+				},
+				default: '',
+				description: 'New content for the note (leave empty to keep current)',
+			},
+
+			// Note ID for update/delete operations
+			{
+				displayName: 'Note ID',
+				name: 'noteId',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						useCase: ['updateNote', 'deleteNote'],
+					},
+				},
+				default: '',
+				placeholder: 'e.g., 123e4567-e89b-12d3-a456-426614174000',
+				description: 'UUID of the note to update or delete',
+			},
+
+			// Multiple targets for createNote
+			{
+				displayName: 'Assign To',
+				name: 'noteTargets',
+				type: 'fixedCollection',
+				placeholder: 'Add Person or Company',
+				displayOptions: {
+					show: {
+						useCase: ['createNote'],
+					},
+				},
+				typeOptions: {
+					multipleValues: true,
+				},
+				default: {},
+				options: [
+					{
+						name: 'target',
+						displayName: 'Target',
+						values: [
+							{
+								displayName: 'Target Type',
+								name: 'targetType',
+								type: 'options',
+								options: [
+									{ name: 'Person', value: 'person' },
+									{ name: 'Company', value: 'company' },
+								],
+								default: 'person',
+								description: 'Whether to assign the note to a person or company',
+							},
+							{
+								displayName: 'Person ID',
+								name: 'personId',
+								type: 'string',
+								required: true,
+								displayOptions: {
+									show: {
+										targetType: ['person'],
+									},
+								},
+								default: '',
+								placeholder: 'e.g., 123e4567-e89b-12d3-a456-426614174000',
+								description: 'UUID of the person to assign the note to',
+							},
+							{
+								displayName: 'Company ID',
+								name: 'companyId',
+								type: 'string',
+								required: true,
+								displayOptions: {
+									show: {
+										targetType: ['company'],
+									},
+								},
+								default: '',
+								placeholder: 'e.g., 987fcdeb-51a2-43d1-b123-426614174111',
+								description: 'UUID of the company to assign the note to',
+							},
+						],
+					},
+				],
+			},
+
+			// List notes configuration
+			{
+				displayName: 'List Notes By',
+				name: 'listNotesBy',
+				type: 'options',
+				options: [
+					{ name: 'Person', value: 'person' },
+					{ name: 'Company', value: 'company' },
+				],
+				displayOptions: {
+					show: {
+						useCase: ['listNotes'],
+					},
+				},
+				default: 'person',
+				description: 'Whether to list notes for a person or company',
+			},
+
+			// Person ID for listing notes
+			{
+				displayName: 'Person ID',
+				name: 'personId',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						useCase: ['listNotes'],
+						listNotesBy: ['person'],
+					},
+				},
+				default: '',
+				placeholder: 'e.g., 123e4567-e89b-12d3-a456-426614174000',
+				description: 'UUID of the person to list notes for',
+			},
+
+			// Company ID for listing notes
+			{
+				displayName: 'Company ID',
+				name: 'companyId',
+				type: 'string',
+				required: true,
+				displayOptions: {
+					show: {
+						useCase: ['listNotes'],
+						listNotesBy: ['company'],
+					},
+				},
+				default: '',
+				placeholder: 'e.g., 987fcdeb-51a2-43d1-b123-426614174111',
+				description: 'UUID of the company to list notes for',
 			},
 
 			// Search configuration for unified search operations
@@ -855,6 +1070,23 @@ export class Twenty implements INodeType {
 				let responseData: any;
 
 				switch (useCase) {
+					// NOTE OPERATIONS
+					case 'createNote':
+						responseData = await NoteOperations.createNote(this, i);
+						break;
+
+					case 'listNotes':
+						responseData = await NoteOperations.listNotes(this, i);
+						break;
+
+					case 'updateNote':
+						responseData = await NoteOperations.updateNote(this, i);
+						break;
+
+					case 'deleteNote':
+						responseData = await NoteOperations.deleteNote(this, i);
+						break;
+
 					// PERSON OPERATIONS
 					case 'findPerson':
 						responseData = await PersonOperations.findPerson(this, i);
