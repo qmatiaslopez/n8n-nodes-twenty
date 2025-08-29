@@ -19,7 +19,7 @@ export class Twenty implements INodeType {
 		icon: 'file:twenty.svg',
 		group: ['transform'],
 		version: 1,
-		subtitle: '={{$parameter["useCase"]}}',
+		subtitle: '={{$parameter["resource"] + ": " + $parameter["operation"]}}',
 		description: 'Interact with Twenty CRM using smart workflows',
 		defaults: {
 			name: 'Twenty',
@@ -34,9 +34,207 @@ export class Twenty implements INodeType {
 		],
 		properties: [
 			{
+				displayName: 'Resource',
+				name: 'resource',
+				type: 'options',
+				noDataExpression: true,
+				options: [
+					{
+						name: 'Person',
+						value: 'person',
+						description: 'Work with people/contacts',
+					},
+					{
+						name: 'Company',
+						value: 'company',
+						description: 'Work with companies/organizations',
+					},
+					{
+						name: 'Opportunity',
+						value: 'opportunity',
+						description: 'Work with opportunities/deals',
+					},
+					{
+						name: 'Note',
+						value: 'note',
+						description: 'Work with notes and comments',
+					},
+				],
+				default: 'person',
+			},
+			{
+				displayName: 'Operation',
+				name: 'operation',
+				type: 'options',
+				noDataExpression: true,
+				displayOptions: {
+					show: {
+						resource: ['person'],
+					},
+				},
+				options: [
+					{
+						name: 'Create',
+						value: 'create',
+						description: 'Create a new person',
+						action: 'Create a person',
+					},
+					{
+						name: 'Delete',
+						value: 'delete',
+						description: 'Delete a person',
+						action: 'Delete a person',
+					},
+					{
+						name: 'Find',
+						value: 'find',
+						description: 'Search for a person using various criteria',
+						action: 'Find a person',
+					},
+					{
+						name: 'List by Company',
+						value: 'listByCompany',
+						description: 'List all people associated with a company',
+						action: 'List people by company',
+					},
+					{
+						name: 'Update',
+						value: 'update',
+						description: 'Update an existing person',
+						action: 'Update a person',
+					},
+				],
+				default: 'find',
+			},
+			{
+				displayName: 'Operation',
+				name: 'operation',
+				type: 'options',
+				noDataExpression: true,
+				displayOptions: {
+					show: {
+						resource: ['company'],
+					},
+				},
+				options: [
+					{
+						name: 'Create',
+						value: 'create',
+						description: 'Create a new company',
+						action: 'Create a company',
+					},
+					{
+						name: 'Find',
+						value: 'find',
+						description: 'Search for a company using various criteria',
+						action: 'Find a company',
+					},
+					{
+						name: 'Update',
+						value: 'update',
+						description: 'Update an existing company',
+						action: 'Update a company',
+					},
+					{
+						name: 'Delete',
+						value: 'delete',
+						description: 'Delete a company',
+						action: 'Delete a company',
+					},
+				],
+				default: 'find',
+			},
+			{
+				displayName: 'Operation',
+				name: 'operation',
+				type: 'options',
+				noDataExpression: true,
+				displayOptions: {
+					show: {
+						resource: ['opportunity'],
+					},
+				},
+				options: [
+					{
+						name: 'Create',
+						value: 'create',
+						description: 'Create a new opportunity',
+						action: 'Create an opportunity',
+					},
+					{
+						name: 'Delete',
+						value: 'delete',
+						description: 'Delete an opportunity',
+						action: 'Delete an opportunity',
+					},
+					{
+						name: 'Find',
+						value: 'find',
+						description: 'Search for an opportunity using various criteria',
+						action: 'Find an opportunity',
+					},
+					{
+						name: 'List',
+						value: 'list',
+						description: 'List opportunities with optional filters',
+						action: 'List opportunities',
+					},
+					{
+						name: 'Update',
+						value: 'update',
+						description: 'Update an existing opportunity',
+						action: 'Update an opportunity',
+					},
+				],
+				default: 'find',
+			},
+			{
+				displayName: 'Operation',
+				name: 'operation',
+				type: 'options',
+				noDataExpression: true,
+				displayOptions: {
+					show: {
+						resource: ['note'],
+					},
+				},
+				options: [
+					{
+						name: 'Create',
+						value: 'create',
+						description: 'Create a new note and assign it to people or companies',
+						action: 'Create a note',
+					},
+					{
+						name: 'Update',
+						value: 'update',
+						description: 'Update an existing note',
+						action: 'Update a note',
+					},
+					{
+						name: 'Delete',
+						value: 'delete',
+						description: 'Delete a note',
+						action: 'Delete a note',
+					},
+					{
+						name: 'List',
+						value: 'list',
+						description: 'List notes assigned to a person or company',
+						action: 'List notes',
+					},
+				],
+				default: 'create',
+			},
+			{
 				displayName: 'What Do You Want to Do?',
 				name: 'useCase',
 				type: 'options',
+				displayOptions: {
+					show: {
+						'@version': [{ _cnd: { lte: 0 } }], // Hide this field
+					},
+				},
 				options: [
 					{
 						name: 'Create Company',
@@ -142,7 +340,8 @@ export class Twenty implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						useCase: ['createNote'],
+						resource: ['note'],
+						operation: ['create'],
 					},
 				},
 				default: '',
@@ -154,7 +353,8 @@ export class Twenty implements INodeType {
 				type: 'string',
 				displayOptions: {
 					show: {
-						useCase: ['updateNote'],
+						resource: ['note'],
+						operation: ['update'],
 					},
 				},
 				default: '',
@@ -172,7 +372,8 @@ export class Twenty implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						useCase: ['createNote'],
+						resource: ['note'],
+						operation: ['create'],
 					},
 				},
 				default: '',
@@ -187,7 +388,8 @@ export class Twenty implements INodeType {
 				},
 				displayOptions: {
 					show: {
-						useCase: ['updateNote'],
+						resource: ['note'],
+						operation: ['update'],
 					},
 				},
 				default: '',
@@ -202,7 +404,8 @@ export class Twenty implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						useCase: ['updateNote', 'deleteNote'],
+						resource: ['note'],
+						operation: ['update', 'delete'],
 					},
 				},
 				default: '',
@@ -218,7 +421,8 @@ export class Twenty implements INodeType {
 				placeholder: 'Add Person or Company',
 				displayOptions: {
 					show: {
-						useCase: ['createNote'],
+						resource: ['note'],
+						operation: ['create'],
 					},
 				},
 				typeOptions: {
@@ -285,7 +489,8 @@ export class Twenty implements INodeType {
 				],
 				displayOptions: {
 					show: {
-						useCase: ['listNotes'],
+						resource: ['note'],
+						operation: ['list'],
 					},
 				},
 				default: 'person',
@@ -300,7 +505,8 @@ export class Twenty implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						useCase: ['listNotes'],
+						resource: ['note'],
+						operation: ['list'],
 						listNotesBy: ['person'],
 					},
 				},
@@ -317,7 +523,8 @@ export class Twenty implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						useCase: ['listNotes'],
+						resource: ['note'],
+						operation: ['list'],
 						listNotesBy: ['company'],
 					},
 				},
@@ -338,7 +545,8 @@ export class Twenty implements INodeType {
 				],
 				displayOptions: {
 					show: {
-						useCase: ['findPerson'],
+						resource: ['person'],
+						operation: ['find'],
 					},
 				},
 				default: 'email',
@@ -356,7 +564,8 @@ export class Twenty implements INodeType {
 				],
 				displayOptions: {
 					show: {
-						useCase: ['findCompany'],
+						resource: ['company'],
+						operation: ['find'],
 					},
 				},
 				default: 'name',
@@ -374,7 +583,8 @@ export class Twenty implements INodeType {
 				],
 				displayOptions: {
 					show: {
-						useCase: ['findOpportunity'],
+						resource: ['opportunity'],
+						operation: ['find'],
 					},
 				},
 				default: 'name',
@@ -391,7 +601,8 @@ export class Twenty implements INodeType {
 				displayOptions: {
 					show: {
 						searchBy: ['customField'],
-						useCase: ['findPerson', 'findCompany', 'findOpportunity'],
+						resource: ['person', 'company', 'opportunity'],
+						operation: ['find'],
 					},
 				},
 				default: '',
@@ -407,7 +618,8 @@ export class Twenty implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						useCase: ['findPerson', 'findCompany', 'findOpportunity'],
+						resource: ['person', 'company', 'opportunity'],
+						operation: ['find'],
 					},
 				},
 				default: '',
@@ -424,7 +636,8 @@ export class Twenty implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						useCase: ['createCompany'],
+						resource: ['company'],
+						operation: ['create'],
 					},
 				},
 				default: '',
@@ -439,7 +652,8 @@ export class Twenty implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						useCase: ['createOpportunity'],
+						resource: ['opportunity'],
+						operation: ['create'],
 					},
 				},
 				default: '',
@@ -458,7 +672,8 @@ export class Twenty implements INodeType {
 				],
 				displayOptions: {
 					show: {
-						useCase: ['deletePerson', 'updatePerson'],
+						resource: ['person'],
+						operation: ['delete', 'update'],
 					},
 				},
 				default: 'email',
@@ -476,7 +691,8 @@ export class Twenty implements INodeType {
 				],
 				displayOptions: {
 					show: {
-						useCase: ['deleteCompany', 'updateCompany'],
+						resource: ['company'],
+						operation: ['delete', 'update'],
 					},
 				},
 				default: 'name',
@@ -494,7 +710,8 @@ export class Twenty implements INodeType {
 				],
 				displayOptions: {
 					show: {
-						useCase: ['deleteOpportunity', 'updateOpportunity'],
+						resource: ['opportunity'],
+						operation: ['delete', 'update'],
 					},
 				},
 				default: 'name',
@@ -511,7 +728,8 @@ export class Twenty implements INodeType {
 				displayOptions: {
 					show: {
 						updateSearchBy: ['customField'],
-						useCase: ['deletePerson', 'updatePerson', 'deleteCompany', 'updateCompany', 'deleteOpportunity', 'updateOpportunity'],
+						resource: ['person', 'company', 'opportunity'],
+						operation: ['delete', 'update'],
 					},
 				},
 				default: '',
@@ -527,7 +745,8 @@ export class Twenty implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						useCase: ['deletePerson', 'updatePerson', 'deleteCompany', 'updateCompany', 'deleteOpportunity', 'updateOpportunity'],
+						resource: ['person', 'company', 'opportunity'],
+						operation: ['delete', 'update'],
 					},
 				},
 				default: '',
@@ -546,7 +765,8 @@ export class Twenty implements INodeType {
 				],
 				displayOptions: {
 					show: {
-						useCase: ['listPersonsByCompany'],
+						resource: ['person'],
+						operation: ['listByCompany'],
 					},
 				},
 				default: 'name',
@@ -561,7 +781,8 @@ export class Twenty implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						useCase: ['listPersonsByCompany'],
+						resource: ['person'],
+						operation: ['listByCompany'],
 					},
 				},
 				default: '',
@@ -577,14 +798,8 @@ export class Twenty implements INodeType {
 				placeholder: 'Add Field',
 				displayOptions: {
 					show: {
-						useCase: [
-							'addContact',
-							'findOrCreateContact',
-							'updateContactByEmail',
-							'syncContactData',
-							'createPerson',
-							'updatePerson',
-						],
+						resource: ['person'],
+						operation: ['create', 'update'],
 					},
 				},
 				default: {},
@@ -688,7 +903,8 @@ export class Twenty implements INodeType {
 				placeholder: 'Add Custom Field',
 				displayOptions: {
 					show: {
-						useCase: ['updatePerson'],
+						resource: ['person'],
+						operation: ['update'],
 					},
 				},
 				default: {},
@@ -729,7 +945,8 @@ export class Twenty implements INodeType {
 				placeholder: 'Add Custom Field',
 				displayOptions: {
 					show: {
-						useCase: ['updateCompany'],
+						resource: ['company'],
+						operation: ['update'],
 					},
 				},
 				default: {},
@@ -770,13 +987,8 @@ export class Twenty implements INodeType {
 				placeholder: 'Add Field',
 				displayOptions: {
 					show: {
-						useCase: [
-							'addCompany',
-							'findOrCreateCompany',
-							'updateCompanyByName',
-							'createCompany',
-							'updateCompany',
-						],
+						resource: ['company'],
+						operation: ['create', 'update'],
 					},
 				},
 				default: {},
@@ -894,10 +1106,8 @@ export class Twenty implements INodeType {
 				placeholder: 'Add Field',
 				displayOptions: {
 					show: {
-						useCase: [
-							'createOpportunity',
-							'updateOpportunity',
-						],
+						resource: ['opportunity'],
+						operation: ['create', 'update'],
 					},
 				},
 				default: {},
@@ -971,7 +1181,8 @@ export class Twenty implements INodeType {
 				placeholder: 'Add Filter',
 				displayOptions: {
 					show: {
-						useCase: ['listOpportunities'],
+						resource: ['opportunity'],
+						operation: ['list'],
 					},
 				},
 				default: {},
@@ -1066,10 +1277,107 @@ export class Twenty implements INodeType {
 
 		for (let i = 0; i < items.length; i++) {
 			try {
-				const useCase = this.getNodeParameter('useCase', i) as string;
+				// Get resource and operation from new categorized structure
+				const resource = this.getNodeParameter('resource', i) as string;
+				const operation = this.getNodeParameter('operation', i) as string;
+				
+				// For backward compatibility, also get useCase if present
+				let useCase: string | undefined;
+				try {
+					useCase = this.getNodeParameter('useCase', i) as string;
+				} catch {
+					// useCase doesn't exist in new workflows, which is expected
+				}
+
 				let responseData: any;
 
-				switch (useCase) {
+				// Use new resource+operation logic if available, fall back to useCase for compatibility
+				if (resource && operation) {
+					// New categorized structure
+					const resourceOperation = `${resource}:${operation}`;
+					switch (resourceOperation) {
+					// NOTE OPERATIONS
+					case 'note:create':
+						responseData = await NoteOperations.createNote(this, i);
+						break;
+
+					case 'note:list':
+						responseData = await NoteOperations.listNotes(this, i);
+						break;
+
+					case 'note:update':
+						responseData = await NoteOperations.updateNote(this, i);
+						break;
+
+					case 'note:delete':
+						responseData = await NoteOperations.deleteNote(this, i);
+						break;
+
+					// PERSON OPERATIONS
+					case 'person:find':
+						responseData = await PersonOperations.findPerson(this, i);
+						break;
+
+					case 'person:create':
+						responseData = await PersonOperations.createPerson(this, i);
+						break;
+
+					case 'person:update':
+						responseData = await PersonOperations.updatePerson(this, i);
+						break;
+
+					case 'person:delete':
+						responseData = await PersonOperations.deletePerson(this, i);
+						break;
+
+					case 'person:listByCompany':
+						responseData = await PersonOperations.listPersonsByCompany(this, i);
+						break;
+
+					// COMPANY OPERATIONS
+					case 'company:find':
+						responseData = await CompanyOperations.findCompany(this, i);
+						break;
+
+					case 'company:create':
+						responseData = await CompanyOperations.createCompany(this, i);
+						break;
+
+					case 'company:update':
+						responseData = await CompanyOperations.updateCompany(this, i);
+						break;
+
+					case 'company:delete':
+						responseData = await CompanyOperations.deleteCompany(this, i);
+						break;
+
+					// OPPORTUNITY OPERATIONS
+					case 'opportunity:find':
+						responseData = await OpportunityOperations.findOpportunity(this, i);
+						break;
+
+					case 'opportunity:create':
+						responseData = await OpportunityOperations.createOpportunity(this, i);
+						break;
+
+					case 'opportunity:update':
+						responseData = await OpportunityOperations.updateOpportunity(this, i);
+						break;
+
+					case 'opportunity:delete':
+						responseData = await OpportunityOperations.deleteOpportunity(this, i);
+						break;
+
+					case 'opportunity:list':
+						responseData = await OpportunityOperations.listOpportunities(this, i);
+						break;
+
+					default:
+						throw new NodeOperationError(this.getNode(), `Unknown resource:operation combination: ${resourceOperation}`);
+				}
+				} else if (useCase) {
+					// Legacy useCase-based logic for backward compatibility
+					switch (useCase) {
 					// NOTE OPERATIONS
 					case 'createNote':
 						responseData = await NoteOperations.createNote(this, i);
@@ -1182,15 +1490,32 @@ export class Twenty implements INodeType {
 					default:
 						throw new NodeOperationError(this.getNode(), `Unknown use case: ${useCase}`);
 				}
+				} else {
+					throw new NodeOperationError(this.getNode(), 'Neither resource+operation nor useCase parameters found');
+				}
 
 				returnData.push({ json: responseData });
 
 			} catch (error) {
 				if (this.continueOnFail()) {
+					let operation_info = {};
+					try {
+						const resource = this.getNodeParameter('resource', i) as string;
+						const operation = this.getNodeParameter('operation', i) as string;
+						operation_info = { resource, operation };
+					} catch {
+						try {
+							const useCase = this.getNodeParameter('useCase', i) as string;
+							operation_info = { useCase };
+						} catch {
+							operation_info = { error: 'No operation parameters found' };
+						}
+					}
+
 					returnData.push({
 						json: { 
 							error: error.message,
-							useCase: this.getNodeParameter('useCase', i),
+							...operation_info,
 							success: false,
 						},
 						error,
