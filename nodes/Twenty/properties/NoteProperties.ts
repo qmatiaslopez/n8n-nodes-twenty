@@ -40,7 +40,6 @@ export const noteProperties: INodeProperties[] = [
 		typeOptions: {
 			rows: 4,
 		},
-		required: true,
 		displayOptions: {
 			show: {
 				resource: [resource],
@@ -167,28 +166,38 @@ export const noteProperties: INodeProperties[] = [
 	},
 
 	// Person ID for listing notes
-	PropertyBuilder.createStringProperty(
-		'Person ID',
-		'personId',
-		resource,
-		['list'],
-		{
-			required: true,
-			placeholder: 'e.g., 123e4567-e89b-12d3-a456-426614174000',
-			description: 'UUID of the person to list notes for'
-		}
-	),
+	{
+		displayName: 'Person ID',
+		name: 'personId',
+		type: 'string',
+		required: true,
+		displayOptions: {
+			show: {
+				resource: [resource],
+				operation: ['list'],
+				listNotesBy: ['person'],
+			},
+		},
+		default: '',
+		placeholder: 'e.g., 123e4567-e89b-12d3-a456-426614174000',
+		description: 'UUID of the person to list notes for',
+	},
 
 	// Company ID for listing notes
-	PropertyBuilder.createStringProperty(
-		'Company ID',
-		'companyId',
-		resource,
-		['list'],
-		{
-			required: true,
-			placeholder: 'e.g., 987fcdeb-51a2-43d1-b123-426614174111',
-			description: 'UUID of the company to list notes for'
-		}
-	),
+	{
+		displayName: 'Company ID',
+		name: 'companyId',
+		type: 'string',
+		required: true,
+		displayOptions: {
+			show: {
+				resource: [resource],
+				operation: ['list'],
+				listNotesBy: ['company'],
+			},
+		},
+		default: '',
+		placeholder: 'e.g., 987fcdeb-51a2-43d1-b123-426614174111',
+		description: 'UUID of the company to list notes for',
+	},
 ];
