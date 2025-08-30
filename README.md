@@ -21,14 +21,9 @@ This is an advanced n8n community node that provides comprehensive **Twenty CRM*
 
 ## 📦 Installation
 
-### For n8n Cloud
+### For n8n
 1. Go to **Settings** → **Community Nodes**
 2. Install: `n8n-nodes-twenty-fork`
-
-### For Self-hosted n8n
-```bash
-npm install n8n-nodes-twenty-fork
-```
 
 ### Requirements
 - **Twenty CRM** v1.4.0 or later
@@ -79,50 +74,6 @@ npm install n8n-nodes-twenty-fork
 - **Delete**: Remove notes by ID  
 - **List**: Get notes associated with specific entities
 
-## 💡 Usage Examples
-
-### Find a Person by Email
-```json
-{
-  "resource": "person",
-  "operation": "find", 
-  "searchBy": "email",
-  "searchValue": "john.doe@company.com"
-}
-```
-
-### Create a Company with Full Details
-```json
-{
-  "resource": "company",
-  "operation": "create",
-  "name": "Acme Corporation",
-  "domainName": "acme.com", 
-  "employees": 150,
-  "address": {
-    "addressStreet1": "123 Business St",
-    "addressCity": "New York",
-    "addressState": "NY",
-    "addressCountry": "USA"
-  }
-}
-```
-
-### Create an Opportunity Linked to Company
-```json
-{
-  "resource": "opportunity", 
-  "operation": "create",
-  "name": "Q4 Enterprise Deal",
-  "amount": {
-    "amountMicros": 50000000000,
-    "currencyCode": "USD"
-  },
-  "stage": "QUALIFICATION",
-  "companyId": "company-uuid-here"
-}
-```
-
 ## 🏗️ Technical Architecture
 
 ### GraphQL Migration Benefits
@@ -157,39 +108,6 @@ nodes/Twenty/
 - **UUID Validation**: Proper Twenty ID format validation
 - **Custom Fields**: Support for custom field searches and updates
 - **Relationship Handling**: Automatic entity linking and relationship management
-
-## 📈 Version History
-
-### v2.3.1 (Current)
-- **UI Improvement**: Moved Advanced Options to the bottom of the n8n UI for better user experience
-- **Architecture Enhancement**: Created dedicated AdvancedProperties module following project structure
-- **Code Organization**: Extended PropertyBuilder with createAdvancedOptionsProperty() method
-- **Clean Separation**: Extracted advanced options from CommonProperties for better modularity
-
-### v2.3.0
-- Comprehensive documentation overhaul with modern README
-- Refined package.json description and keywords for better discoverability
-- Enhanced GraphQL-first architecture messaging
-- Improved developer experience with updated documentation
-
-### v2.2.0
-- Enhanced field resolution system with fallback mechanisms
-- Improved custom field support with better error handling  
-- Consolidated shared utilities for better maintainability
-- Updated property builders for dynamic UI generation
-
-### v1.0.0 - GraphQL Migration
-- Complete migration from REST to GraphQL API
-- Modular architecture with TypeScript
-- 4 main resources with full CRUD operations
-- Unified search and validation systems
-- Zero breaking changes for existing workflows
-
-### v0.x - REST Era (Legacy)
-- REST API implementation with Twenty v1.4.0+ compatibility
-- Enhanced filtering and pagination
-- Custom field support
-- Metadata API integration
 
 ## 🤝 Credits & Acknowledgments
 
