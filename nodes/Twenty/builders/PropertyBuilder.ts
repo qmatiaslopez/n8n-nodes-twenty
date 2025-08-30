@@ -227,4 +227,26 @@ export class PropertyBuilder {
 
 		return property;
 	}
+
+	/**
+	 * Creates advanced options property
+	 */
+	static createAdvancedOptionsProperty(): INodeProperties {
+		return {
+			displayName: 'Advanced Options',
+			name: 'advancedOptions',
+			type: 'collection',
+			placeholder: 'Add Option',
+			default: {},
+			options: [
+				{
+					displayName: 'Include Related Data',
+					name: 'includeRelated',
+					type: 'boolean',
+					default: true,
+					description: 'Whether to include related objects (company, people, etc.)',
+				},
+			],
+		};
+	}
 }

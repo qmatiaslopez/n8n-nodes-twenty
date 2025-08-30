@@ -31,23 +31,4 @@ export const commonProperties: INodeProperties[] = [
 		],
 		default: 'person',
 	},
-
-
-	// Advanced options
-	{
-		displayName: 'Advanced Options',
-		name: 'advancedOptions',
-		type: 'collection',
-		placeholder: 'Add Option',
-		default: {},
-		options: [
-			{
-				displayName: 'Include Related Data',
-				name: 'includeRelated',
-				type: 'boolean',
-				default: true,
-				description: 'Whether to include related objects (company, people, etc.)',
-			},
-		],
-	},
 ];

@@ -160,7 +160,13 @@ nodes/Twenty/
 
 ## 📈 Version History
 
-### v2.3.0 (Current)
+### v2.3.1 (Current)
+- **UI Improvement**: Moved Advanced Options to the bottom of the n8n UI for better user experience
+- **Architecture Enhancement**: Created dedicated AdvancedProperties module following project structure
+- **Code Organization**: Extended PropertyBuilder with createAdvancedOptionsProperty() method
+- **Clean Separation**: Extracted advanced options from CommonProperties for better modularity
+
+### v2.3.0
 - Comprehensive documentation overhaul with modern README
 - Refined package.json description and keywords for better discoverability
 - Enhanced GraphQL-first architecture messaging
