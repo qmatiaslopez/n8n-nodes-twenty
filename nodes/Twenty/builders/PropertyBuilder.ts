@@ -12,6 +12,7 @@ export class PropertyBuilder {
 			displayName: 'Search By',
 			name: fieldName,
 			type: 'options',
+			default: options[0]?.value || 'email',
 			options: options as any,
 			displayOptions: {
 				show: {
@@ -19,7 +20,6 @@ export class PropertyBuilder {
 					operation: [operationType]
 				}
 			},
-			default: options[0]?.value || 'email',
 			description: `How to search for the ${resource}`
 		};
 	}
@@ -80,14 +80,14 @@ export class PropertyBuilder {
 			displayName: 'Operation',
 			name: 'operation',
 			type: 'options',
+			default: operations[0]?.value || 'find',
 			noDataExpression: true,
 			displayOptions: {
 				show: {
 					resource: [resource]
 				}
 			},
-			options: operations as any,
-			default: operations[0]?.value || 'find'
+			options: operations as any
 		};
 	}
 
@@ -176,6 +176,7 @@ export class PropertyBuilder {
 			displayName,
 			name,
 			type: 'string',
+			default: options.default || '',
 			required: options.required || false,
 			displayOptions: {
 				show: {
@@ -183,7 +184,6 @@ export class PropertyBuilder {
 					operation: operations
 				}
 			},
-			default: options.default || '',
 			placeholder: options.placeholder,
 			description: options.description
 		};
@@ -209,13 +209,13 @@ export class PropertyBuilder {
 			displayName,
 			name,
 			type: 'number',
+			default: options.default || 0,
 			displayOptions: {
 				show: {
 					resource: [resource],
 					operation: operations
 				}
 			},
-			default: options.default || 0,
 			description: options.description
 		};
 
