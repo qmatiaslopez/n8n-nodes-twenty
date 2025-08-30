@@ -1,48 +1,28 @@
 # n8n-nodes-twenty-fork
 
-> **v1.0.0 Major Update**: Complete migration from REST to GraphQL! This version now uses Twenty's native GraphQL API for better performance and reliability.
+[![npm version](https://badge.fury.io/js/n8n-nodes-twenty-fork.svg)](https://badge.fury.io/js/n8n-nodes-twenty-fork)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![n8n community](https://img.shields.io/badge/n8n-community-orange.svg)](https://n8n.io/integrations/community-nodes/)
 
-This is an n8n community node that lets you use **Twenty CRM** in your n8n workflows. Originally forked from [n8n-nodes-twenty](https://github.com/shodgson/n8n-nodes-twenty) by S Hodgson, completely rewritten for GraphQL by Matias Lopez.
+This is an advanced n8n community node that provides comprehensive **Twenty CRM** integration using modern GraphQL architecture. Originally forked from [n8n-nodes-twenty](https://github.com/shodgson/n8n-nodes-twenty) by S Hodgson, it has been completely rewritten with GraphQL-first approach and modular architecture by Matias Lopez.
 
-[Twenty CRM](https://twenty.com/) is an open-source CRM (customer relationship management) tool. This node is compatible with **Twenty v1.4.0 and later**.
+[Twenty CRM](https://twenty.com/) is a modern open-source CRM platform. This node is compatible with **Twenty v1.4.0 and later**.
 
-## 🚀 Version 1.0.0 Highlights
+## 🚀 Key Features
 
-- **🔄 Complete GraphQL Migration**: All operations now use Twenty's primary GraphQL API
-- **⚡ Better Performance**: Single GraphQL requests vs multiple REST calls
-- **🛡️ Improved Reliability**: Uses Twenty's main API (same as their frontend)
-- **🔮 Future-Proof**: Aligned with Twenty's development direction
-- **✨ Zero Breaking Changes**: Same n8n interface, seamless upgrade
+- **🔄 GraphQL-First Architecture**: Uses Twenty's native GraphQL API for optimal performance
+- **📊 4 Main Resources**: Complete CRUD operations for People, Companies, Opportunities, and Notes  
+- **🔍 Unified Search**: Search by email, phone, custom fields with smart matching
+- **✅ Robust Validation**: UUID validation, field resolution, and centralized error handling
+- **🏗️ Modular Design**: Well-organized, maintainable codebase with TypeScript
+- **🎯 Advanced Operations**: Create, Find, Update, Delete, List with filtering and pagination
+- **🔗 Smart Relationships**: Automatic linking between People, Companies, and Opportunities
+- **📝 Rich Note System**: Attach notes to any entity with full text support
 
-### API Evolution
-
-| Version | API Type | Endpoint | Status |
-|---------|----------|----------|---------|
-| v0.x | REST | `/rest/core/*` | Legacy |
-| **v1.0.0** | **GraphQL** | **`/graphql`** | **✅ Current** |
-
-### What's New in v1.0.0
-
-- 🔄 **GraphQL-First**: All CRUD operations use GraphQL mutations and queries
-- 🎯 **Better Error Handling**: GraphQL provides more detailed error messages  
-- 📊 **Optimized Queries**: Fetch exactly the data you need
-- 🔒 **Type Safety**: Full TypeScript support with GraphQL schema validation
-- 🚀 **Performance**: Reduced network overhead with single requests
-
-[n8n](https://n8n.io/) is a [fair-code licensed](https://docs.n8n.io/reference/license/) workflow automation platform.
-
-[Installation](#installation)  
-[Operations](#operations)  
-[Credentials](#credentials)  
-[Compatibility](#compatibility)  
-[Resources](#resources)  
-[Credit](#credit)  
-[Version history](#version-history)  
-
-## Installation
+## 📦 Installation
 
 ### For n8n Cloud
-1. Go to Settings → Community Nodes
+1. Go to **Settings** → **Community Nodes**
 2. Install: `n8n-nodes-twenty-fork`
 
 ### For Self-hosted n8n
@@ -51,130 +31,210 @@ npm install n8n-nodes-twenty-fork
 ```
 
 ### Requirements
-- Twenty CRM v1.4.0 or later
-- n8n v0.140.0 or later
+- **Twenty CRM** v1.4.0 or later
+- **n8n** v0.140.0 or later
+- **Node.js** 18.10 or later
 
-### Migration from Original
-If you're currently using the original `n8n-nodes-twenty`:
-1. Ensure your Twenty instance is v1.4.0+
-2. Uninstall: `npm uninstall n8n-nodes-twenty`  
-3. Install fork: `npm install n8n-nodes-twenty-fork`
-4. No workflow changes needed - same node interface
+## 🔧 Configuration
 
-Follow the [installation guide](https://docs.n8n.io/integrations/community-nodes/installation/) in the n8n community nodes documentation for more details.
+1. **Generate API Key**: In Twenty, go to **Settings** → **Developers** → **API Keys**
+2. **Add Credentials**: In n8n, search for "Twenty API" credentials
+3. **Configure**:
+   - **API Key**: Your Twenty API key
+   - **Domain**: Your Twenty instance URL (e.g., `https://app.twenty.com` or `http://localhost:3000`)
+   - ⚠️ Do not include `/graphql` in the domain - the node handles this automatically
 
-## Operations
-	- General
-	- Api Keys
-	- Attachments
-	- Blocklists
-	- Calendar Channel Event Associations
-	- Calendar Channels
-	- Calendar Event Participants
-	- Calendar Events
-	- Companies
-	- Connected Accounts
-	- Favorite Folders
-	- Favorites
-	- Message Channel Message Associations
-	- Message Channels
-	- Message Folders
-	- Message Participants
-	- Messages
-	- Message Threads
-	- Notes
-	- Note Targets
-	- Opportunities
-	- People
-	- Tasks
-	- Task Targets
-	- Timeline Activities
-	- View Fields
-	- View Filter Groups
-	- View Filters
-	- View Groups
-	- Views
-	- View Sorts
-	- Webhooks
-	- Workflow Automated Triggers
-	- Workflow Runs
-	- Workflows
-	- Workflow Versions
-	- Workspace Members
+## 📋 Available Resources & Operations
 
-## Credentials
+| Resource | Operations | Description |
+|----------|------------|-------------|
+| **👤 Person** | Create, Find, Update, Delete, List by Company | Manage contacts with full profile data |
+| **🏢 Company** | Create, Find, Update, Delete | Handle organizations and business entities |
+| **💼 Opportunity** | Create, Find, Update, Delete, List | Track sales opportunities and deals |
+| **📝 Note** | Create, Update, Delete, List | Attach notes to people, companies, or opportunities |
 
-Generate an API key in Twenty by following the [Twenty docs](https://twenty.com/developers). In summary, create an API key in the Settings → Playground section.
+### Person Operations
+- **Create**: Add new contacts with names, emails, phones, job titles, and company relationships
+- **Find**: Search by email, phone, or custom fields with confidence scoring
+- **Update**: Modify existing contact information using email or ID lookup
+- **Delete**: Remove contacts by ID
+- **List by Company**: Get all people associated with a specific company
 
-Copy the API key. Click 'Add Credential' in n8n and search for 'Twenty API'. Provide the API key and your Twenty domain (e.g. http://localhost:3000, https://app.twenty.com). Do _not_ include the API path - the node will automatically use the correct endpoints.
+### Company Operations  
+- **Create**: Add companies with names, domains, addresses, and revenue information
+- **Find**: Search by company name with fuzzy matching
+- **Update**: Modify company details including contact information and financials
+- **Delete**: Remove companies by ID
 
-## Compatibility
+### Opportunity Operations
+- **Create**: Add new sales opportunities with amounts, stages, and relationships  
+- **Find**: Search opportunities by name or custom criteria
+- **Update**: Modify deal information, stages, and amounts
+- **Delete**: Remove opportunities by ID
+- **List**: Get filtered lists of opportunities with pagination
 
-**BREAKING CHANGE:** This version requires Twenty v1.4.0 or later. For older versions of Twenty, use n8n-nodes-twenty v0.0.5 instead.
+### Note Operations
+- **Create**: Attach notes to people, companies, or opportunities
+- **Update**: Modify note content and titles
+- **Delete**: Remove notes by ID  
+- **List**: Get notes associated with specific entities
 
-Compatible and tested with Twenty v1.4.0 and n8n v1.91.3+.
+## 💡 Usage Examples
 
-## Resources
+### Find a Person by Email
+```json
+{
+  "resource": "person",
+  "operation": "find", 
+  "searchBy": "email",
+  "searchValue": "john.doe@company.com"
+}
+```
 
-* [n8n community nodes documentation](https://docs.n8n.io/integrations/community-nodes/)
-* [Twenty developer documentation](https://twenty.com/developers/)
+### Create a Company with Full Details
+```json
+{
+  "resource": "company",
+  "operation": "create",
+  "name": "Acme Corporation",
+  "domainName": "acme.com", 
+  "employees": 150,
+  "address": {
+    "addressStreet1": "123 Business St",
+    "addressCity": "New York",
+    "addressState": "NY",
+    "addressCountry": "USA"
+  }
+}
+```
 
-## Version history
+### Create an Opportunity Linked to Company
+```json
+{
+  "resource": "opportunity", 
+  "operation": "create",
+  "name": "Q4 Enterprise Deal",
+  "amount": {
+    "amountMicros": 50000000000,
+    "currencyCode": "USD"
+  },
+  "stage": "QUALIFICATION",
+  "companyId": "company-uuid-here"
+}
+```
 
-### Fork Version History
+## 🏗️ Technical Architecture
 
-#### v1.0.0 🚀 (Major GraphQL Migration)
-**Complete migration from REST to GraphQL API**
-- ✅ **GraphQL-First**: All operations use Twenty's primary GraphQL API
-- ✅ **Zero Breaking Changes**: Same n8n interface, seamless upgrade
-- ✅ **Better Performance**: Single GraphQL requests vs multiple REST calls  
-- ✅ **Improved Reliability**: Uses Twenty's main API (same as frontend)
-- ✅ **Future-Proof**: Aligned with Twenty's development direction
-- ✅ **Enhanced Error Handling**: Better GraphQL error messages
-- ✅ **Type Safety**: Full TypeScript support with schema validation
+### GraphQL Migration Benefits
+- **Single Request Efficiency**: GraphQL queries fetch exactly the data needed
+- **Type Safety**: Full TypeScript support with schema validation  
+- **Future-Proof**: Aligned with Twenty's primary development direction
+- **Better Error Handling**: Detailed GraphQL error messages and field validation
+- **Optimized Performance**: Reduced network overhead compared to multiple REST calls
 
-#### v0.6.9 (REST Era - Final)
-Added comprehensive field resolution system with fallback mechanisms and enhanced custom field support with improved error handling for unknown fields.
+### Modular Code Organization
+```
+nodes/Twenty/
+├── operations/          # Resource-specific business logic
+│   ├── PersonOperations.ts
+│   ├── CompanyOperations.ts  
+│   ├── OpportunityOperations.ts
+│   └── NoteOperations.ts
+├── shared/             # Shared utilities and helpers
+│   ├── ValidationUtils.ts
+│   ├── ErrorHandler.ts
+│   └── LoadOptionsUtils.ts
+├── properties/         # n8n UI property definitions
+├── types/              # TypeScript type definitions
+├── constants/          # Application constants
+├── builders/           # Property builders for dynamic UI
+└── GenericFunctions.ts # Core GraphQL infrastructure
+```
 
-#### v0.1.0 (Fork by Matias Lopez)
-**BREAKING CHANGE:** Forked for Twenty v1.4.0 compatibility
-- Updated API endpoints from `/rest/*` to `/rest/core/*`
-- Added support for metadata API at `/rest/metadata/*`
-- Enhanced filtering with advanced operators (`and`, `or`, `not`)
-- Improved cursor-based pagination
-- Updated OpenAPI schema for v1.4.0 features
-- NOT compatible with Twenty versions < v1.4.0
-- Fork of original work by S Hodgson
+### Smart Features
+- **Field Resolution**: Automatic field name mapping and validation
+- **Unified Search**: Consistent search interface across all resources  
+- **UUID Validation**: Proper Twenty ID format validation
+- **Custom Fields**: Support for custom field searches and updates
+- **Relationship Handling**: Automatic entity linking and relationship management
 
-### Original Version History
+## 📈 Version History
 
-#### v0.0.5 (Original by S Hodgson)
-Simplified to build on n8n-openapi-node (Last version compatible with Twenty < v1.4.0)
+### v2.3.0 (Current)
+- Comprehensive documentation overhaul with modern README
+- Refined package.json description and keywords for better discoverability
+- Enhanced GraphQL-first architecture messaging
+- Improved developer experience with updated documentation
 
-#### v0.0.4
-Compatible with Twenty's updated API in v0.40.7
+### v2.2.0
+- Enhanced field resolution system with fallback mechanisms
+- Improved custom field support with better error handling  
+- Consolidated shared utilities for better maintainability
+- Updated property builders for dynamic UI generation
 
-#### v0.0.3
-Compatible with Twenty's updated API in v0.33.4
+### v1.0.0 - GraphQL Migration
+- Complete migration from REST to GraphQL API
+- Modular architecture with TypeScript
+- 4 main resources with full CRUD operations
+- Unified search and validation systems
+- Zero breaking changes for existing workflows
 
-#### v0.0.1
-Initial release
+### v0.x - REST Era (Legacy)
+- REST API implementation with Twenty v1.4.0+ compatibility
+- Enhanced filtering and pagination
+- Custom field support
+- Metadata API integration
 
-## Credits & Attribution
+## 🤝 Credits & Acknowledgments
 
-### Original Work
-- **S Hodgson** - Original creator of [n8n-nodes-twenty](https://github.com/shodgson/n8n-nodes-twenty)
-- **devlikeapro** - [n8n-openapi-node](https://github.com/devlikeapro/n8n-openapi-node) framework
-- Previous versions relied on similar tools from [ivov](https://github.com/ivov) and [feelgood-interface](https://github.com/feelgood-interface)
+### Original Creator
+**[S Hodgson](https://github.com/shodgson)** - Original author of [n8n-nodes-twenty](https://github.com/shodgson/n8n-nodes-twenty)
 
-### Fork Maintainer
-- **Matias Lopez** - v1.4.0 compatibility and v1.0.0 GraphQL migration
+The foundation of this work is built upon S Hodgson's excellent initial implementation. This fork extends and modernizes that work with GraphQL migration and enhanced architecture.
+
+### Fork Maintainer  
+**[Matias Lopez](https://github.com/qmatiaslopez)** - GraphQL migration, modern architecture, and ongoing maintenance
+
+### Development Tools
+- **[devlikeapro](https://github.com/devlikeapro)** - [n8n-openapi-node](https://github.com/devlikeapro/n8n-openapi-node) framework
+- Built with assistance from **Claude Code** for documentation and development guidance
 
 ### What This Fork Adds
-This fork builds upon S Hodgson's excellent foundation by adding:
-- **v1.0.0**: Complete migration to Twenty's GraphQL API
-- **v0.x**: Updated API endpoints for Twenty v1.4.0+
-- **v0.x**: Metadata API integration  
-- **v0.x**: Enhanced filtering and pagination
-- **v0.x**: Modern OpenAPI schema integration
+This fork transforms the original REST-based implementation into a modern, GraphQL-first solution:
 
+- 🔄 **Complete GraphQL Migration**: Uses Twenty's native GraphQL API
+- 🏗️ **Modern Architecture**: Modular, TypeScript-based design
+- 🎯 **Enhanced Operations**: More comprehensive CRUD operations  
+- 🔍 **Smart Search**: Advanced search capabilities with confidence scoring
+- ✅ **Robust Validation**: Comprehensive error handling and field validation
+- 📊 **Better UX**: Improved n8n integration with dynamic properties
+
+## 🛠️ Compatibility
+
+| Component | Version | Status |
+|-----------|---------|--------|
+| **Twenty CRM** | v1.4.0+ | ✅ Tested |
+| **n8n** | v0.140.0+ | ✅ Supported |
+| **Node.js** | 18.10+ | ✅ Required |
+
+## 📚 Resources
+
+- **[n8n Community Nodes Documentation](https://docs.n8n.io/integrations/community-nodes/)**
+- **[Twenty Developer Documentation](https://twenty.com/developers/)**  
+- **[Twenty GraphQL API](https://twenty.com/developers/graphql-api)**
+- **[Original n8n-nodes-twenty](https://github.com/shodgson/n8n-nodes-twenty)**
+
+## 🐛 Issues & Support
+
+For issues, feature requests, or questions:
+- **GitHub Issues**: [Report here](https://github.com/qmatiaslopez/n8n-nodes-twenty/issues)
+- **Twenty Community**: [Join discussions](https://twenty.com/community)
+- **n8n Community**: [Get help](https://community.n8n.io/)
+
+## 📄 License
+
+MIT License - see [LICENSE.md](LICENSE.md) for details.
+
+---
+
+*This README was created with assistance from Claude Code for comprehensive documentation.*

@@ -3,9 +3,13 @@ import {
 	IExecuteFunctions,
 	ILoadOptionsFunctions,
 	IRequestOptions,
-	NodeApiError,
 	NodeOperationError,
 } from 'n8n-workflow';
+import { ERROR_MESSAGES } from './constants';
+import { ValidationUtils } from './shared/ValidationUtils';
+import { ErrorHandler } from './shared/ErrorHandler';
+import { LoadOptionsUtils } from './shared/LoadOptionsUtils';
+
 // Simple UUID v4 generator without requiring crypto module
 
 // Custom Field Filter Builder
@@ -13,22 +17,22 @@ export function buildCustomFieldFilter(
 	fieldPath: string, 
 	searchValue: string
 ): IDataObject {
-	const parts = fieldPath.split('.');
+	const pathParts = fieldPath.split('.');
 	
-	if (parts.length === 1) {
-		// Campo directo: jobTitle -> { jobTitle: { eq: "value" } }
-		return { [parts[0]]: { eq: searchValue } };
-	} else if (parts.length === 2) {
-		// Campo anidado: emails.primaryEmail -> { emails: { primaryEmail: { eq: "value" } } }
-		const [parentField, childField] = parts;
+	if (pathParts.length === 1) {
+		// Direct field: jobTitle -> { jobTitle: { eq: "value" } }
+		return { [pathParts[0]]: { eq: searchValue } };
+	} else if (pathParts.length === 2) {
+		// Nested field: emails.primaryEmail -> { emails: { primaryEmail: { eq: "value" } } }
+		const [parentField, childField] = pathParts;
 		return { [parentField]: { [childField]: { eq: searchValue } } };
 	} else {
-		// Para campos más profundamente anidados (raro pero posible)
+		// For deeply nested fields (rare but possible)
 		let filter = { eq: searchValue };
-		for (let i = parts.length - 2; i >= 0; i--) {
-			filter = { [parts[i + 1]]: filter } as any;
+		for (let i = pathParts.length - 2; i >= 0; i--) {
+			filter = { [pathParts[i + 1]]: filter } as any;
 		}
-		return { [parts[0]]: filter };
+		return { [pathParts[0]]: filter };
 	}
 }
 
@@ -39,7 +43,7 @@ export async function validateCustomFieldPath(
 	fieldPath: string
 ): Promise<{ valid: boolean; error?: string }> {
 	try {
-		const parts = fieldPath.split('.');
+		const pathParts = fieldPath.split('.');
 		
 		// Use GraphQL introspection to get field information
 		const introspectionQuery = `
@@ -66,38 +70,38 @@ export async function validateCustomFieldPath(
 		const targetType = types.find((type: any) => type.name === objectType);
 		
 		if (!targetType?.fields) {
-			return { valid: false, error: `Type "${objectType}" not found in schema` };
+			return { valid: false, error: ERROR_MESSAGES.TYPE_NOT_FOUND(objectType) };
 		}
 		
 		const fields = targetType.fields;
 		
-		if (parts.length === 1) {
-			// Validar campo directo
-			const fieldExists = fields.some((f: any) => f.name === parts[0]);
+		if (pathParts.length === 1) {
+			// Validate direct field
+			const fieldExists = fields.some((f: any) => f.name === pathParts[0]);
 			return { 
 				valid: fieldExists, 
-				error: fieldExists ? undefined : `Field "${parts[0]}" not found in ${objectType}` 
+				error: fieldExists ? undefined : ERROR_MESSAGES.FIELD_NOT_FOUND(pathParts[0], objectType) 
 			};
-		} else if (parts.length === 2) {
-			// Validar campo anidado
-			const parentField = fields.find((f: any) => f.name === parts[0]);
+		} else if (pathParts.length === 2) {
+			// Validate nested field
+			const parentField = fields.find((f: any) => f.name === pathParts[0]);
 			if (!parentField) {
-				return { valid: false, error: `Parent field "${parts[0]}" not found in ${objectType}` };
+				return { valid: false, error: ERROR_MESSAGES.PARENT_FIELD_NOT_FOUND(pathParts[0], objectType) };
 			}
 			
 			const childFields = parentField.type?.fields || [];
-			const childExists = childFields.some((f: any) => f.name === parts[1]);
+			const childExists = childFields.some((f: any) => f.name === pathParts[1]);
 			return { 
 				valid: childExists, 
-				error: childExists ? undefined : `Child field "${parts[1]}" not found in "${parts[0]}"` 
+				error: childExists ? undefined : ERROR_MESSAGES.CHILD_FIELD_NOT_FOUND(pathParts[1], pathParts[0]) 
 			};
 		} else {
-			// Para campos más profundos, usar validación básica
-			return { valid: true }; // Aceptar y dejar que GraphQL valide
+			// For deeper fields, use basic validation
+			return { valid: true }; // Accept and let GraphQL validate
 		}
 		
 	} catch (error) {
-		// En caso de error de introspección, permitir el campo y dejar que GraphQL valide
+		// In case of introspection error, allow the field and let GraphQL validate
 		return { valid: true };
 	}
 }
@@ -111,7 +115,7 @@ export async function twentyGraphQLRequest(
 	const credentials = await this.getCredentials('twentyApi');
 
 	if (credentials === undefined) {
-		throw new NodeOperationError(this.getNode(), 'No credentials returned!');
+		ErrorHandler.handleMissingCredentials(this);
 	}
 
 	const options: IRequestOptions = {
@@ -135,16 +139,7 @@ export async function twentyGraphQLRequest(
 		
 		return response;
 	} catch (error) {
-		// Enhance error messages for better UX
-		let errorMessage = 'Twenty GraphQL request failed';
-		if (error.response?.data?.errors) {
-			const errorMessages = error.response.data.errors.map((err: any) => err.message).join('; ');
-			errorMessage = `Twenty GraphQL Error: ${errorMessages}`;
-		} else if (error.message) {
-			errorMessage = `Twenty GraphQL Error: ${error.message}`;
-		}
-		
-		throw new NodeApiError(this.getNode(), error, { message: errorMessage });
+		ErrorHandler.handleGraphQLError(this, error, 'GraphQL Request');
 	}
 }
 
@@ -202,301 +197,34 @@ export function buildGraphQLMutation(
 }
 
 
-// UUID Helper Functions - Keep for GraphQL operations
+// UUID Helper Functions - Keep for GraphQL operations (using centralized validation)
 export function isValidTwentyUuid(value: string): boolean {
-	const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-	return uuidRegex.test(value);
+	return ValidationUtils.isValidUuid(value);
 }
 
-// Load Options Methods for Dropdowns - GraphQL
+// Load Options Methods for Dropdowns - Using consolidated utilities
 export async function loadCompanies(this: ILoadOptionsFunctions) {
-	try {
-		const credentials = await this.getCredentials('twentyApi');
-		if (!credentials) {
-			throw new NodeOperationError(this.getNode(), 'No credentials returned!');
-		}
-		
-		const query = `
-			query LoadCompanies($first: Int) {
-				companies(first: $first) {
-					edges {
-						node {
-							id
-							name
-						}
-					}
-				}
-			}
-		`;
-
-		const options: IRequestOptions = {
-			method: 'POST',
-			body: {
-				query,
-				variables: { first: 100 },
-			},
-			uri: `${credentials.domain}/graphql`,
-			json: true,
-		};
-		
-		const response = await this.helpers.requestWithAuthentication.call(this, 'twentyApi', options);
-		
-		if (response.errors && response.errors.length > 0) {
-			const errorMessages = response.errors.map((error: any) => error.message).join('; ');
-			throw new NodeOperationError(this.getNode(), `GraphQL Error: ${errorMessages}`);
-		}
-		
-		const companies = response.data?.companies?.edges.map((edge: any) => edge.node) || [];
-		
-		return companies.map((company: any) => ({
-			name: company.name || `Company ${company.id.slice(0, 8)}`,
-			value: company.id,
-		}));
-	} catch (error) {
-		throw new NodeOperationError(this.getNode(), `Failed to load companies: ${error.message}`);
-	}
+	return LoadOptionsUtils.loadCompanies(this);
 }
 
 export async function loadPeople(this: ILoadOptionsFunctions) {
-	try {
-		const credentials = await this.getCredentials('twentyApi');
-		if (!credentials) {
-			throw new NodeOperationError(this.getNode(), 'No credentials returned!');
-		}
-		
-		const query = `
-			query LoadPeople($first: Int) {
-				people(first: $first) {
-					edges {
-						node {
-							id
-							name {
-								firstName
-								lastName
-							}
-						}
-					}
-				}
-			}
-		`;
-
-		const options: IRequestOptions = {
-			method: 'POST',
-			body: {
-				query,
-				variables: { first: 100 },
-			},
-			uri: `${credentials.domain}/graphql`,
-			json: true,
-		};
-		
-		const response = await this.helpers.requestWithAuthentication.call(this, 'twentyApi', options);
-		
-		if (response.errors && response.errors.length > 0) {
-			const errorMessages = response.errors.map((error: any) => error.message).join('; ');
-			throw new NodeOperationError(this.getNode(), `GraphQL Error: ${errorMessages}`);
-		}
-		
-		const people = response.data?.people?.edges.map((edge: any) => edge.node) || [];
-		
-		return people.map((person: any) => ({
-			name: `${person.name?.firstName || ''} ${person.name?.lastName || ''}`.trim() || `Person ${person.id.slice(0, 8)}`,
-			value: person.id,
-		}));
-	} catch (error) {
-		throw new NodeOperationError(this.getNode(), `Failed to load people: ${error.message}`);
-	}
+	return LoadOptionsUtils.loadPeople(this);
 }
 
 export async function loadOpportunities(this: ILoadOptionsFunctions) {
-	try {
-		const credentials = await this.getCredentials('twentyApi');
-		if (!credentials) {
-			throw new NodeOperationError(this.getNode(), 'No credentials returned!');
-		}
-		
-		const query = `
-			query LoadOpportunities($first: Int) {
-				opportunities(first: $first) {
-					edges {
-						node {
-							id
-							name
-						}
-					}
-				}
-			}
-		`;
-
-		const options: IRequestOptions = {
-			method: 'POST',
-			body: {
-				query,
-				variables: { first: 100 },
-			},
-			uri: `${credentials.domain}/graphql`,
-			json: true,
-		};
-		
-		const response = await this.helpers.requestWithAuthentication.call(this, 'twentyApi', options);
-		
-		if (response.errors && response.errors.length > 0) {
-			const errorMessages = response.errors.map((error: any) => error.message).join('; ');
-			throw new NodeOperationError(this.getNode(), `GraphQL Error: ${errorMessages}`);
-		}
-		
-		const opportunities = response.data?.opportunities?.edges.map((edge: any) => edge.node) || [];
-		
-		return opportunities.map((opportunity: any) => ({
-			name: opportunity.name || `Opportunity ${opportunity.id.slice(0, 8)}`,
-			value: opportunity.id,
-		}));
-	} catch (error) {
-		throw new NodeOperationError(this.getNode(), `Failed to load opportunities: ${error.message}`);
-	}
+	return LoadOptionsUtils.loadOpportunities(this);
 }
 
 export async function loadNotes(this: ILoadOptionsFunctions) {
-	try {
-		const credentials = await this.getCredentials('twentyApi');
-		if (!credentials) {
-			throw new NodeOperationError(this.getNode(), 'No credentials returned!');
-		}
-		
-		const query = `
-			query LoadNotes($first: Int) {
-				notes(first: $first) {
-					edges {
-						node {
-							id
-							title
-						}
-					}
-				}
-			}
-		`;
-
-		const options: IRequestOptions = {
-			method: 'POST',
-			body: {
-				query,
-				variables: { first: 100 },
-			},
-			uri: `${credentials.domain}/graphql`,
-			json: true,
-		};
-		
-		const response = await this.helpers.requestWithAuthentication.call(this, 'twentyApi', options);
-		
-		if (response.errors && response.errors.length > 0) {
-			const errorMessages = response.errors.map((error: any) => error.message).join('; ');
-			throw new NodeOperationError(this.getNode(), `GraphQL Error: ${errorMessages}`);
-		}
-		
-		const notes = response.data?.notes?.edges.map((edge: any) => edge.node) || [];
-		
-		return notes.map((note: any) => ({
-			name: note.title || `Note ${note.id.slice(0, 8)}`,
-			value: note.id,
-		}));
-	} catch (error) {
-		throw new NodeOperationError(this.getNode(), `Failed to load notes: ${error.message}`);
-	}
+	return LoadOptionsUtils.loadNotes(this);
 }
 
 export async function loadTasks(this: ILoadOptionsFunctions) {
-	try {
-		const credentials = await this.getCredentials('twentyApi');
-		if (!credentials) {
-			throw new NodeOperationError(this.getNode(), 'No credentials returned!');
-		}
-		
-		const query = `
-			query LoadTasks($first: Int) {
-				tasks(first: $first) {
-					edges {
-						node {
-							id
-							title
-						}
-					}
-				}
-			}
-		`;
-
-		const options: IRequestOptions = {
-			method: 'POST',
-			body: {
-				query,
-				variables: { first: 100 },
-			},
-			uri: `${credentials.domain}/graphql`,
-			json: true,
-		};
-		
-		const response = await this.helpers.requestWithAuthentication.call(this, 'twentyApi', options);
-		
-		if (response.errors && response.errors.length > 0) {
-			const errorMessages = response.errors.map((error: any) => error.message).join('; ');
-			throw new NodeOperationError(this.getNode(), `GraphQL Error: ${errorMessages}`);
-		}
-		
-		const tasks = response.data?.tasks?.edges.map((edge: any) => edge.node) || [];
-		
-		return tasks.map((task: any) => ({
-			name: task.title || `Task ${task.id.slice(0, 8)}`,
-			value: task.id,
-		}));
-	} catch (error) {
-		throw new NodeOperationError(this.getNode(), `Failed to load tasks: ${error.message}`);
-	}
+	return LoadOptionsUtils.loadTasks(this);
 }
 
 export async function loadMessageThreads(this: ILoadOptionsFunctions) {
-	try {
-		const credentials = await this.getCredentials('twentyApi');
-		if (!credentials) {
-			throw new NodeOperationError(this.getNode(), 'No credentials returned!');
-		}
-		
-		const query = `
-			query LoadMessageThreads($first: Int) {
-				messageThreads(first: $first) {
-					edges {
-						node {
-							id
-						}
-					}
-				}
-			}
-		`;
-
-		const options: IRequestOptions = {
-			method: 'POST',
-			body: {
-				query,
-				variables: { first: 100 },
-			},
-			uri: `${credentials.domain}/graphql`,
-			json: true,
-		};
-		
-		const response = await this.helpers.requestWithAuthentication.call(this, 'twentyApi', options);
-		
-		if (response.errors && response.errors.length > 0) {
-			const errorMessages = response.errors.map((error: any) => error.message).join('; ');
-			throw new NodeOperationError(this.getNode(), `GraphQL Error: ${errorMessages}`);
-		}
-		
-		const messageThreads = response.data?.messageThreads?.edges.map((edge: any) => edge.node) || [];
-		
-		return messageThreads.map((thread: any) => ({
-			name: `Thread ${thread.id.slice(0, 8)}`,
-			value: thread.id,
-		}));
-	} catch (error) {
-		throw new NodeOperationError(this.getNode(), `Failed to load message threads: ${error.message}`);
-	}
+	return LoadOptionsUtils.loadMessageThreads(this);
 }
 
 // Smart Search Functions - REST versions removed, use GraphQL equivalents
@@ -975,90 +703,6 @@ export async function resolveFieldName(
 	}
 }
 
-// GraphQL equivalent of resolveFieldName using introspection
-export async function resolveFieldNameGraphQL(
-	this: IExecuteFunctions,
-	objectType: 'person' | 'company',
-	fieldInput: string
-): Promise<{
-	resolvedField: string | null;
-	fieldExists: boolean;
-	triedFields: string[];
-	fallbackUsed?: boolean;
-}> {
-	const candidates = [
-		fieldInput,                           // Exact: "instagram"
-		`${fieldInput}Link`,                 // With suffix: "instagramLink"
-		fieldInput.toLowerCase(),            // Lowercase: "Instagram" → "instagram"
-		`${fieldInput.toLowerCase()}Link`    // Lowercase + suffix: "instagramLink"
-	];
-	
-	// Remove duplicates while preserving order
-	const uniqueCandidates = [...new Set(candidates)];
-	
-	try {
-		// Use GraphQL introspection to get field information
-		const typeName = objectType === 'person' ? 'Person' : 'Company';
-		const introspectionQuery = `
-			query GetTypeFields {
-				__schema {
-					types(names: ["${typeName}"]) {
-						name
-						fields {
-							name
-							type {
-								name
-							}
-						}
-					}
-				}
-			}
-		`;
-		
-		const response = await twentyGraphQLRequest.call(this, introspectionQuery);
-		const types = response.data?.__schema?.types || [];
-		const targetType = types.find((type: any) => type.name === typeName);
-		
-		if (!targetType?.fields) {
-			return {
-				resolvedField: null,
-				fieldExists: false,
-				triedFields: uniqueCandidates
-			};
-		}
-		
-		const availableFields = targetType.fields.map((field: any) => field.name);
-		
-		// Try each candidate
-		for (const candidate of uniqueCandidates) {
-			if (availableFields.includes(candidate)) {
-				return {
-					resolvedField: candidate,
-					fieldExists: true,
-					triedFields: uniqueCandidates
-				};
-			}
-		}
-		
-		// No match found
-		return {
-			resolvedField: null,
-			fieldExists: false,
-			triedFields: uniqueCandidates
-		};
-		
-	} catch (error) {
-		// Fallback: try the field name directly if introspection fails
-		const fallbackField = uniqueCandidates[0];
-		
-		return {
-			resolvedField: fallbackField,
-			fieldExists: false, // We couldn't validate but we're trying anyway
-			triedFields: uniqueCandidates,
-			fallbackUsed: true
-		};
-	}
-}
 
 
 // GraphQL equivalent of findPersonUnified
@@ -1358,12 +1002,7 @@ export async function listPersonsByCompanyGraphQL(
 	companyId: string
 ) {
 	try {
-		if (!isValidTwentyUuid(companyId)) {
-			throw new NodeOperationError(
-				this.getNode(),
-				'Invalid company ID format. Must be a valid UUID.'
-			);
-		}
+		ValidationUtils.validateUuid(this, companyId, 'company');
 		
 		// GraphQL query to get people by company
 		const query = `
@@ -1938,13 +1577,7 @@ export async function deletePersonGraphQL(
 	error?: string;
 }> {
 	try {
-		if (!isValidTwentyUuid(personId)) {
-			return {
-				deleted: false,
-				personId,
-				error: 'Invalid person ID format. Must be a valid UUID.',
-			};
-		}
+		ValidationUtils.validateUuid(this, personId, 'person');
 
 		const mutation = `
 			mutation DeletePerson($idToDelete: UUID!) {
@@ -1988,13 +1621,7 @@ export async function deleteCompanyGraphQL(
 	error?: string;
 }> {
 	try {
-		if (!isValidTwentyUuid(companyId)) {
-			return {
-				deleted: false,
-				companyId,
-				error: 'Invalid company ID format. Must be a valid UUID.',
-			};
-		}
+		ValidationUtils.validateUuid(this, companyId, 'company');
 
 		const mutation = `
 			mutation DeleteCompany($idToDelete: UUID!) {
@@ -2043,13 +1670,7 @@ export async function updateCompanyGraphQL(
 	error?: string;
 }> {
 	try {
-		if (!isValidTwentyUuid(companyId)) {
-			return {
-				updated: false,
-				company: null,
-				error: 'Invalid company ID format. Must be a valid UUID.',
-			};
-		}
+		ValidationUtils.validateUuid(this, companyId, 'company');
 
 		const mutation = `
 			mutation UpdateCompany($idToUpdate: UUID!, $input: CompanyUpdateInput!) {
@@ -2426,12 +2047,7 @@ export async function listNotesByPersonIdGraphQL(
 	personId: string;
 }> {
 	try {
-		if (!isValidTwentyUuid(personId)) {
-			throw new NodeOperationError(
-				this.getNode(),
-				'Invalid person ID format. Must be a valid UUID.'
-			);
-		}
+		ValidationUtils.validateUuid(this, personId, 'person');
 
 		const query = `
 			query GetNotesByPersonId($filter: NoteFilterInput, $first: Int) {
@@ -2526,12 +2142,7 @@ export async function listNotesByCompanyIdGraphQL(
 	companyId: string;
 }> {
 	try {
-		if (!isValidTwentyUuid(companyId)) {
-			throw new NodeOperationError(
-				this.getNode(),
-				'Invalid company ID format. Must be a valid UUID.'
-			);
-		}
+		ValidationUtils.validateUuid(this, companyId, 'company');
 
 		const query = `
 			query GetNotesByCompanyId($filter: NoteFilterInput, $first: Int) {
@@ -2627,13 +2238,7 @@ export async function updateNoteGraphQL(
 	error?: string;
 }> {
 	try {
-		if (!isValidTwentyUuid(noteId)) {
-			return {
-				updated: false,
-				note: null,
-				error: 'Invalid note ID format. Must be a valid UUID.'
-			};
-		}
+		ValidationUtils.validateUuid(this, noteId, 'note');
 
 		const mutation = `
 			mutation UpdateNote($id: UUID!, $data: NoteUpdateInput!) {
@@ -2712,13 +2317,7 @@ export async function deleteNoteGraphQL(
 	error?: string;
 }> {
 	try {
-		if (!isValidTwentyUuid(noteId)) {
-			return {
-				deleted: false,
-				noteId,
-				error: 'Invalid note ID format. Must be a valid UUID.'
-			};
-		}
+		ValidationUtils.validateUuid(this, noteId, 'note');
 
 		const mutation = `
 			mutation DeleteNote($id: UUID!) {

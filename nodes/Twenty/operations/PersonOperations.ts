@@ -8,6 +8,7 @@ import {
 	findCompanyUnifiedGraphQL,
 	resolveFieldName,
 } from '../GenericFunctions';
+import { ValidationUtils } from '../shared/ValidationUtils';
 
 export class PersonOperations {
 	/**
@@ -50,12 +51,7 @@ export class PersonOperations {
 	static async createPerson(context: IExecuteFunctions, i: number): Promise<IDataObject> {
 		const additionalFields = context.getNodeParameter('additionalFields', i, {}) as any;
 
-		if (!additionalFields.firstName) {
-			throw new NodeOperationError(
-				context.getNode(),
-				'First Name is required for creating a person. Please provide it in Additional Fields.'
-			);
-		}
+		ValidationUtils.validateRequiredField(context, additionalFields.firstName, 'First Name');
 
 		const personData: IDataObject = {
 			name: { firstName: additionalFields.firstName, lastName: additionalFields.lastName || '' },
