@@ -12,7 +12,6 @@ export class PropertyBuilder {
 			displayName: 'Search By',
 			name: fieldName,
 			type: 'options',
-			default: '',
 			default: options[0]?.value || 'email',
 			options: options as any,
 			displayOptions: {
@@ -81,7 +80,6 @@ export class PropertyBuilder {
 			displayName: 'Operation',
 			name: 'operation',
 			type: 'options',
-			default: '',
 			default: operations[0]?.value || 'find',
 			noDataExpression: true,
 			displayOptions: {
@@ -178,7 +176,6 @@ export class PropertyBuilder {
 			displayName,
 			name,
 			type: 'string',
-			default: '',
 			default: options.default || '',
 			required: options.required || false,
 			displayOptions: {
@@ -212,7 +209,6 @@ export class PropertyBuilder {
 			displayName,
 			name,
 			type: 'number',
-			default: '0',
 			default: options.default || 0,
 			displayOptions: {
 				show: {
