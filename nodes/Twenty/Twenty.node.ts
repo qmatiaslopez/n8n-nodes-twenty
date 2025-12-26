@@ -15,6 +15,7 @@ import { PersonOperations } from './operations/PersonOperations';
 import { CompanyOperations } from './operations/CompanyOperations';
 import { OpportunityOperations } from './operations/OpportunityOperations';
 import { NoteOperations } from './operations/NoteOperations';
+import { TaskOperations } from './operations/TaskOperations';
 
 export class Twenty implements INodeType {
 	description: INodeTypeDescription = {
@@ -128,6 +129,27 @@ export class Twenty implements INodeType {
 
 					case 'opportunity:list':
 						responseData = await OpportunityOperations.listOpportunities(this, i);
+						break;
+
+					// TASK OPERATIONS
+					case 'task:create':
+						responseData = await TaskOperations.createTask(this, i);
+						break;
+
+					case 'task:update':
+						responseData = await TaskOperations.updateTask(this, i);
+						break;
+
+					case 'task:delete':
+						responseData = await TaskOperations.deleteTask(this, i);
+						break;
+
+					case 'task:find':
+						responseData = await TaskOperations.findTask(this, i);
+						break;
+
+					case 'task:list':
+						responseData = await TaskOperations.listTasks(this, i);
 						break;
 
 					default:

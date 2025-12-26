@@ -2351,3 +2351,381 @@ export async function deleteNoteGraphQL(
 		};
 	}
 }
+
+// ============================================================================
+// TASK OPERATIONS - GraphQL
+// ============================================================================
+
+export async function findTaskUnifiedGraphQL(
+	this: IExecuteFunctions,
+	searchBy: string,
+	searchValue: string,
+	customFieldName?: string
+) {
+	try {
+		const taskFields = `
+			id
+			title
+			bodyV2 {
+				markdown
+				blocknote
+			}
+			status
+			dueAt
+			position
+			createdAt
+			updatedAt
+			assignee {
+				id
+				name {
+					firstName
+					lastName
+				}
+			}
+			taskTargets {
+				edges {
+					node {
+						id
+						person {
+							id
+							name {
+								firstName
+								lastName
+							}
+						}
+						company {
+							id
+							name
+						}
+						opportunity {
+							id
+							name
+						}
+					}
+				}
+			}
+		`;
+
+		let filterClause: IDataObject = {};
+
+		switch (searchBy) {
+			case 'title':
+				filterClause = {
+					title: { ilike: `%${searchValue}%` }
+				};
+				break;
+			case 'customField':
+				if (!customFieldName) {
+					throw new NodeOperationError(
+						this.getNode(),
+						'Custom field name is required when using customField search'
+					);
+				}
+				filterClause = buildCustomFieldFilter(customFieldName, searchValue);
+				break;
+			default:
+				throw new NodeOperationError(
+					this.getNode(),
+					`Unsupported search method: ${searchBy}`
+				);
+		}
+
+		const query = `
+			query FindTasks($filter: TaskFilterInput, $first: Int) {
+				tasks(filter: $filter, first: $first) {
+					edges {
+						node {
+							${taskFields}
+						}
+					}
+					pageInfo {
+						hasNextPage
+						hasPreviousPage
+						startCursor
+						endCursor
+					}
+					totalCount
+				}
+			}
+		`;
+
+		const variables = {
+			filter: filterClause,
+			first: 50
+		};
+
+		const response = await twentyGraphQLRequest.call(this, query, variables);
+		const edges = response.data?.tasks?.edges || [];
+		const tasks = edges.map((edge: any) => edge.node);
+
+		if (tasks.length === 0) {
+			return {
+				found: false,
+				task: null,
+				searchMethod: searchBy,
+				searchValue: searchValue,
+				totalMatches: 0
+			};
+		}
+
+		return {
+			found: true,
+			task: tasks[0],
+			searchMethod: searchBy,
+			searchValue: searchValue,
+			totalMatches: response.data?.tasks?.totalCount || tasks.length
+		};
+
+	} catch (error) {
+		throw new NodeOperationError(
+			this.getNode(),
+			`Failed to search task: ${error.message}`
+		);
+	}
+}
+
+export async function createTaskGraphQL(
+	this: IExecuteFunctions,
+	taskData: IDataObject
+): Promise<any> {
+	try {
+		const mutation = `
+			mutation CreateTask($data: TaskCreateInput!) {
+				createTask(data: $data) {
+					id
+					title
+					bodyV2 {
+						markdown
+					}
+					status
+					dueAt
+					position
+					createdAt
+					assignee {
+						id
+						name {
+							firstName
+							lastName
+						}
+					}
+				}
+			}
+		`;
+
+		const response = await twentyGraphQLRequest.call(this, mutation, { data: taskData });
+		
+		if (!response.data?.createTask) {
+			throw new NodeOperationError(
+				this.getNode(),
+				'Failed to create task - no data returned'
+			);
+		}
+
+		return response.data.createTask;
+
+	} catch (error) {
+		throw new NodeOperationError(
+			this.getNode(),
+			`Failed to create task: ${error.message}`
+		);
+	}
+}
+
+export async function createTaskTargetGraphQL(
+	this: IExecuteFunctions,
+	targetData: IDataObject
+): Promise<any> {
+	try {
+		const mutation = `
+			mutation CreateTaskTarget($data: TaskTargetCreateInput!) {
+				createTaskTarget(data: $data) {
+					id
+					taskId
+					personId
+					companyId
+					opportunityId
+					createdAt
+					updatedAt
+				}
+			}
+		`;
+
+		const response = await twentyGraphQLRequest.call(this, mutation, { data: targetData });
+		
+		if (!response.data?.createTaskTarget) {
+			throw new NodeOperationError(
+				this.getNode(),
+				'Failed to create task target - no data returned'
+			);
+		}
+
+		return response.data.createTaskTarget;
+
+	} catch (error) {
+		throw new NodeOperationError(
+			this.getNode(),
+			`Failed to create task target: ${error.message}`
+		);
+	}
+}
+
+export async function updateTaskGraphQL(
+	this: IExecuteFunctions,
+	taskId: string,
+	updateData: IDataObject
+): Promise<{
+	updated: boolean;
+	task: any;
+	error?: string;
+}> {
+	try {
+		ValidationUtils.validateUuid(this, taskId, 'task');
+
+		const mutation = `
+			mutation UpdateTask($id: UUID!, $data: TaskUpdateInput!) {
+				updateTask(id: $id, data: $data) {
+					id
+					title
+					bodyV2 {
+						markdown
+					}
+					status
+					dueAt
+					position
+					updatedAt
+					assignee {
+						id
+						name {
+							firstName
+							lastName
+						}
+					}
+				}
+			}
+		`;
+
+		const variables = { id: taskId, data: updateData };
+		const response = await twentyGraphQLRequest.call(this, mutation, variables);
+
+		if (!response.data?.updateTask) {
+			return {
+				updated: false,
+				task: null,
+				error: 'No data returned from update operation'
+			};
+		}
+
+		return {
+			updated: true,
+			task: response.data.updateTask
+		};
+
+	} catch (error) {
+		return {
+			updated: false,
+			task: null,
+			error: error.message
+		};
+	}
+}
+
+export async function deleteTaskGraphQL(
+	this: IExecuteFunctions,
+	taskId: string
+): Promise<{
+	deleted: boolean;
+	taskId: string;
+	error?: string;
+}> {
+	try {
+		ValidationUtils.validateUuid(this, taskId, 'task');
+
+		const mutation = `
+			mutation DeleteTask($id: UUID!) {
+				deleteTask(id: $id) {
+					id
+				}
+			}
+		`;
+
+		const variables = { id: taskId };
+		const response = await twentyGraphQLRequest.call(this, mutation, variables);
+
+		if (!response.data?.deleteTask) {
+			return {
+				deleted: false,
+				taskId,
+				error: 'No confirmation returned from delete operation'
+			};
+		}
+
+		return {
+			deleted: true,
+			taskId: response.data.deleteTask.id
+		};
+
+	} catch (error) {
+		return {
+			deleted: false,
+			taskId,
+			error: error.message
+		};
+	}
+}
+
+export async function listTasksGraphQL(
+	this: IExecuteFunctions,
+	limit: number = 50,
+	filters?: IDataObject
+): Promise<{
+	tasks: any[];
+	totalCount: number;
+}> {
+	try {
+		const query = `
+			query ListTasks($first: Int, $filter: TaskFilterInput) {
+				tasks(first: $first, filter: $filter) {
+					edges {
+						node {
+							id
+							title
+							bodyV2 {
+								markdown
+							}
+							status
+							dueAt
+							createdAt
+							assignee {
+								id
+								name {
+									firstName
+									lastName
+								}
+							}
+						}
+					}
+					totalCount
+				}
+			}
+		`;
+		
+		const variables: IDataObject = { first: limit };
+		if (filters) {
+			variables.filter = filters;
+		}
+
+		const response = await twentyGraphQLRequest.call(this, query, variables);
+		const edges = response.data?.tasks?.edges || [];
+		
+		return {
+			tasks: edges.map((edge: any) => edge.node),
+			totalCount: response.data?.tasks?.totalCount || 0
+		};
+
+	} catch (error) {
+		throw new NodeOperationError(
+			this.getNode(),
+			`Failed to list tasks: ${error.message}`
+		);
+	}
+}

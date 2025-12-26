@@ -1,7 +1,7 @@
 {
   "name": "n8n-nodes-twenty-fork",
-  "version": "2.3.2",
-  "description": "Advanced n8n community node for Twenty CRM with GraphQL-first architecture. Complete CRUD operations for People, Companies, Opportunities, and Notes with unified search and smart field resolution.",
+  "version": "2.4.0",
+  "description": "Advanced n8n community node for Twenty CRM with GraphQL-first architecture. Complete CRUD operations for People, Companies, Opportunities, Notes, and Tasks with unified search and smart field resolution.",
   "keywords": [
     "n8n-community-node-package",
     "twenty-crm",

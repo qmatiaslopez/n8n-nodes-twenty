@@ -2,7 +2,8 @@ export const RESOURCES = {
 	PERSON: 'person',
 	COMPANY: 'company', 
 	OPPORTUNITY: 'opportunity',
-	NOTE: 'note'
+	NOTE: 'note',
+	TASK: 'task'
 } as const;
 
 export const OPERATIONS = {
@@ -129,6 +130,38 @@ export const OPERATION_DEFINITIONS = {
 			value: 'list',
 			description: 'List notes assigned to a person or company',
 			action: 'List notes'
+		}
+	],
+	TASK: [
+		{
+			name: 'Create',
+			value: 'create',
+			description: 'Create a new task',
+			action: 'Create a task'
+		},
+		{
+			name: 'Delete',
+			value: 'delete',
+			description: 'Delete a task',
+			action: 'Delete a task'
+		},
+		{
+			name: 'Find',
+			value: 'find',
+			description: 'Search for a task using various criteria',
+			action: 'Find a task'
+		},
+		{
+			name: 'List',
+			value: 'list',
+			description: 'List tasks with optional filters',
+			action: 'List tasks'
+		},
+		{
+			name: 'Update',
+			value: 'update',
+			description: 'Update an existing task',
+			action: 'Update a task'
 		}
 	]
 } as const;

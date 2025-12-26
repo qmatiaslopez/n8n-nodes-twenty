@@ -13,5 +13,9 @@ export const SEARCH_OPTIONS = {
 	OPPORTUNITY: [
 		{ name: 'Name', value: 'name' },
 		{ name: 'Custom Field', value: 'customField' }
+	],
+	TASK: [
+		{ name: 'Title', value: 'title' },
+		{ name: 'Custom Field', value: 'customField' }
 	]
 } as const satisfies Record<string, readonly SearchOption[]>;

@@ -4,6 +4,7 @@ import { personProperties } from './PersonProperties';
 import { companyProperties } from './CompanyProperties';
 import { opportunityProperties } from './OpportunityProperties';
 import { noteProperties } from './NoteProperties';
+import { taskProperties } from './TaskProperties';
 import { advancedProperties } from './AdvancedProperties';
 
 /**
@@ -17,6 +18,7 @@ export function buildNodeProperties(): INodeProperties[] {
 		...companyProperties,       // Company-specific properties  
 		...opportunityProperties,   // Opportunity-specific properties
 		...noteProperties,          // Note-specific properties
+		...taskProperties,          // Task-specific properties
 		...advancedProperties,      // Advanced options - appears at the bottom
 	];
 }
@@ -28,5 +30,6 @@ export {
 	companyProperties,
 	opportunityProperties,
 	noteProperties,
+	taskProperties,
 	advancedProperties,
 };
