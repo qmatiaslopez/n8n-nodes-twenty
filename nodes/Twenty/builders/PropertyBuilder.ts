@@ -12,6 +12,7 @@ export class PropertyBuilder {
 			displayName: 'Search By',
 			name: fieldName,
 			type: 'options',
+			// eslint-disable-next-line n8n-nodes-base/node-param-default-missing
 			default: options[0]?.value || 'email',
 			options: options as any,
 			displayOptions: {
@@ -80,6 +81,7 @@ export class PropertyBuilder {
 			displayName: 'Operation',
 			name: 'operation',
 			type: 'options',
+			// eslint-disable-next-line n8n-nodes-base/node-param-default-missing
 			default: operations[0]?.value || 'find',
 			noDataExpression: true,
 			displayOptions: {
@@ -176,6 +178,7 @@ export class PropertyBuilder {
 			displayName,
 			name,
 			type: 'string',
+			// eslint-disable-next-line n8n-nodes-base/node-param-default-missing
 			default: options.default || '',
 			required: options.required || false,
 			displayOptions: {
@@ -209,6 +212,7 @@ export class PropertyBuilder {
 			displayName,
 			name,
 			type: 'number',
+			// eslint-disable-next-line n8n-nodes-base/node-param-default-missing
 			default: options.default || 0,
 			displayOptions: {
 				show: {
