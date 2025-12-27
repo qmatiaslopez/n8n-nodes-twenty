@@ -3,12 +3,11 @@ name: Publish to NPM
 on:
   release:
     types: [published]
-  # Permite ejecución manual también
   workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write # Requerido para NPM Trusted Publishing
+  id-token: write
 
 jobs:
   publish:
@@ -16,19 +15,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
           registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: npm install
+        run: pnpm install
 
       - name: Build
-        run: npm run build
+        run: pnpm run build
 
       - name: Publish to NPM
-        run: npm publish --access public --provenance
+        run: pnpm publish --access public --no-git-checks
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} # Fallback si no usas trusted publishing, pero con trusted no es necesario si está bien configurado
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
