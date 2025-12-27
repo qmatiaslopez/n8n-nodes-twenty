@@ -28,6 +28,11 @@ export const commonProperties: INodeProperties[] = [
 				value: 'note',
 				description: 'Work with notes and comments',
 			},
+			{
+				name: 'Task',
+				value: 'task',
+				description: 'Work with tasks and to-dos',
+			},
 		],
 		default: 'person',
 	},
