@@ -23,7 +23,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20' # Actualizado a v20 para mejor compatibilidad
+          node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
@@ -32,9 +32,9 @@ jobs:
       - name: Build
         run: pnpm run build
 
-      - name: Publish to NPM
-        # Eliminamos la creación manual de .npmrc y confiamos en provenance
-        # setup-node configura la autenticación automáticamente para pnpm si registry-url está presente
-        run: pnpm publish --access public --no-git-checks --provenance
+      - name: Publish to NPM using native npm
+        # Usamos npm nativo para la publicación porque gestiona mejor la autenticación OIDC
+        # --provenance es clave para trusted publishing
+        run: npm publish --access public --provenance
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} # Setup-node usa esto (o el token OIDC interno)
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
