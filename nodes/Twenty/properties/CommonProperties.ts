@@ -9,14 +9,14 @@ export const commonProperties: INodeProperties[] = [
 		noDataExpression: true,
 		options: [
 			{
-				name: 'Person',
-				value: 'person',
-				description: 'Work with people/contacts',
-			},
-			{
 				name: 'Company',
 				value: 'company',
 				description: 'Work with companies/organizations',
+			},
+			{
+				name: 'Note',
+				value: 'note',
+				description: 'Work with notes and comments',
 			},
 			{
 				name: 'Opportunity',
@@ -24,9 +24,9 @@ export const commonProperties: INodeProperties[] = [
 				description: 'Work with opportunities/deals',
 			},
 			{
-				name: 'Note',
-				value: 'note',
-				description: 'Work with notes and comments',
+				name: 'Person',
+				value: 'person',
+				description: 'Work with people/contacts',
 			},
 			{
 				name: 'Task',
