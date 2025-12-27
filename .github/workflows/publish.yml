@@ -7,7 +7,8 @@ on:
 
 permissions:
   contents: read
-  id-token: write # Requerido para OIDC Trusted Publishing
+  # "id-token: write" is required for generating the provenance statement
+  id-token: write 
 
 jobs:
   publish:
@@ -24,6 +25,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          # This tells the action to configure .npmrc to use NODE_AUTH_TOKEN
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
@@ -33,6 +35,7 @@ jobs:
         run: pnpm run build
 
       - name: Publish to NPM
-        # En Trusted Publishing NO se necesita NODE_AUTH_TOKEN. 
-        # El comando npm lo gestiona internamente vía OIDC.
+        # We pass the token here so npm can authenticate to create the new package
         run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
